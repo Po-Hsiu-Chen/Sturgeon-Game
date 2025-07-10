@@ -20,13 +20,15 @@ interface FishOutfit {
     accessories: string[];       // 其他
 }
 
-/** 魚的完整資料 */
+/** 魚的資料結構 */
 interface FishData {
     id: number;                          // 魚 ID
+    name: string;                        // 名字
     gender: "male" | "female";           // 性別
     stage: number;                       // 成長階段（1 = 魚卵）
     growthDaysRequired: number;         // 成長所需天數
     growthDaysPassed: number;           // 已經經過的天數
+    lastFedDate: string;                 // 最後一次被餵的時間
     hunger: number;                      // 飢餓值（0 = 飽）
     hungerRateMultiplier: number;       // 飢餓速度倍率
     appearance: "ugly" | "beautiful";   // 外觀美醜
@@ -53,7 +55,8 @@ interface PlayerData {
     dragonBones: number;           // 遊戲貨幣（龍骨）
     fishList: FishData[];          // 擁有的魚列表
     tankList: TankData[];          // 擁有的魚缸列表
-    consecutiveSignInDays: number; // 連續登入天數
+    consecutiveLoginDays: number; // 連續登入天數
+    lastLoginDate: string;          // 最後一次登入
     inventory: {
         feeds: {
             normal: number;        // 普通飼料數量
@@ -96,11 +99,13 @@ export class GameManager extends Component {
         for (let i = 1; i <= 3; i++) {
             fishList.push({
                 id: i,
+                name: `鱘龍${i}號`,
                 gender: i % 2 === 0 ? "female" : "male",
                 stage: 1,
                 growthDaysRequired: 10,
                 growthDaysPassed: 0,
-                hunger: 0,
+                lastFedDate: new Date().toISOString(),
+                hunger: 33,
                 hungerRateMultiplier: 1.0,
                 appearance: "ugly",
                 outfit: {
@@ -132,7 +137,8 @@ export class GameManager extends Component {
                 comfort: 80,
                 fishIds: [1, 2, 3]
             }],
-            consecutiveSignInDays: 0,
+            consecutiveLoginDays: 0,
+            lastLoginDate: new Date().toISOString().split('T')[0],
             inventory: {
                 feeds: {
                     normal: 10,
@@ -155,6 +161,55 @@ export class GameManager extends Component {
         localStorage.setItem('playerData', JSON.stringify(playerData));
         console.log('玩家資料已初始化：', playerData);
     }
+
+    /** 處理魚的狀態更新 */
+    processDailyUpdate() {
+        const playerData = JSON.parse(localStorage.getItem('playerData'));
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+
+        const lastLogin = playerData.lastLoginDate || today;
+        const daysPassed = Math.floor((Date.parse(today) - Date.parse(lastLogin)) / (1000 * 60 * 60 * 24));
+        if (daysPassed <= 0) return;
+
+        for (const fish of playerData.fishList) {
+            if (fish.isDead) continue;
+
+            const lastFedTime = new Date(fish.lastFedDate).getTime();
+            const nowTime = now.getTime();
+            const hoursSinceFed = (nowTime - lastFedTime) / (1000 * 60 * 60);
+
+            // 飢餓值 = 小時數 / 72 × 100，最多不超過 100
+            fish.hunger = Math.min(100, Math.floor((hoursSinceFed / 72) * 100));
+
+            // 判斷是否死亡
+            if (fish.hunger >= 100) {
+                fish.isDead = true;
+                fish.hunger = 100;
+                fish.emotion = "hungry";
+            }
+
+            // 成長與升級
+            fish.growthDaysPassed += daysPassed;
+            if (fish.growthDaysPassed >= fish.growthDaysRequired && fish.stage < 6) {
+                fish.stage++;
+                fish.growthDaysPassed = 0;
+
+                const nextGrowthMap = { 1: 10, 2: 20, 3: 40, 4: 50, 5: 60 };
+                fish.growthDaysRequired = nextGrowthMap[fish.stage] || 999;
+            }
+
+            // 更新情緒
+            if (!fish.isDead) {
+                fish.emotion = fish.hunger >= 80 ? "hungry" : "happy";
+            }
+        }
+
+        playerData.lastLoginDate = today;
+        localStorage.setItem('playerData', JSON.stringify(playerData));
+        console.log(`📅 經過 ${daysPassed} 天，魚狀態已更新`);
+    }
+
 
     /** 生成所有魚的實體節點 */
     spawnAllFish() {
@@ -187,9 +242,11 @@ export class GameManager extends Component {
         }
     }
 
+    
     /** 遊戲開始時執行的初始化流程 */
     start() {
         this.initPlayerData();   // 初始化玩家資料
+        this.processDailyUpdate();   // 更新魚的狀態
         this.spawnAllFish();     // 產生所有魚
     }
 

@@ -11,6 +11,8 @@ export class SwimmingFish extends Component {
 
     private emotionBubble: Node | null = null;
 
+    static currentSelectedFish: SwimmingFish | null = null; 
+
     start() {
         const fishArea = this.node.parent; // parent 是 FishArea
         const fishAreaTransform = fishArea.getComponent(UITransform);
@@ -35,9 +37,16 @@ export class SwimmingFish extends Component {
         magnifierBtn?.on(Node.EventType.TOUCH_END, this.onClickMagnifier, this);
 
         this.node.on(Node.EventType.TOUCH_END, this.onClickFish, this);
+        
     }
 
     update(dt: number) {
+        // 如果泡泡顯示中，並且不是目前選中的，就強制隱藏
+        if (this !== SwimmingFish.currentSelectedFish && this.emotionBubble?.active) {
+            this.emotionBubble.active = false;
+        }
+
+        // 泡泡開啟時不移動
         if (this.emotionBubble?.active) return;
 
         const move = this.speed * dt * (this.isMovingRight ? 1 : -1);
@@ -59,10 +68,30 @@ export class SwimmingFish extends Component {
 
     onClickFish() {
         if (!this.emotionBubble) return;
-        const isActive = this.emotionBubble.active;
-        this.emotionBubble.active = !isActive;
+
+        // 若這隻就是目前選中的魚，則關閉泡泡
+        if (SwimmingFish.currentSelectedFish === this) {
+            this.emotionBubble.active = false;
+            SwimmingFish.currentSelectedFish = null;
+        } else {
+            // 關掉前一隻魚的泡泡
+            if (SwimmingFish.currentSelectedFish) {
+                SwimmingFish.currentSelectedFish.emotionBubble!.active = false;
+            }
+
+            // 顯示新的泡泡並設定選中魚
+            this.emotionBubble.active = true;
+            SwimmingFish.currentSelectedFish = this;
+        }
     }
 
+    static clearSelection() {
+        if (SwimmingFish.currentSelectedFish) {
+            SwimmingFish.currentSelectedFish.emotionBubble!.active = false;
+            SwimmingFish.currentSelectedFish = null;
+        }
+    }
+    
     onClickMagnifier() {
         const playerData = JSON.parse(localStorage.getItem('playerData'));
         const fishId = parseInt(this.node.name.split('_')[1]);
