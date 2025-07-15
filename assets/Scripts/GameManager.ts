@@ -1,7 +1,5 @@
-import {
-  _decorator, Component, Node, Prefab, instantiate, Sprite, Label, ProgressBar, UITransform,
-  Vec3
-} from 'cc';
+import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, ProgressBar, UITransform, Vec3 } from 'cc';
+import { SwimmingFish } from './SwimmingFish';
 const { ccclass, property } = _decorator;
 
 // -------- 資料結構定義 --------
@@ -21,12 +19,12 @@ interface FishOutfit {
 }
 
 /** 魚的資料結構 */
-interface FishData {
+export interface FishData {
     id: number;                          // 魚 ID
     name: string;                        // 名字
     gender: "male" | "female";           // 性別
     stage: number;                       // 成長階段（1 = 魚卵）
-    growthDaysRequired: number;         // 成長所需天數
+    growthDaysRequired: number;          // 每個階段需要的天數
     growthDaysPassed: number;           // 已經經過的天數
     lastFedDate: string;                 // 最後一次被餵的時間
     hunger: number;                      // 飢餓值（0 = 飽）
@@ -37,6 +35,7 @@ interface FishData {
     spouseId: number | null;            // 配偶 ID
     status: FishStatus;                 // 即時狀態
     emotion: "happy" | "sad" | "angry" | "hungry" | "cold" | "hot";  // 情緒狀態
+    isDead: boolean;                     // 是否死了
 }
 
 /** 魚缸的資料結構 */
@@ -75,8 +74,6 @@ interface PlayerData {
     };
 }
 
-// -------- 遊戲主控 --------
-
 @ccclass('GameManager')
 export class GameManager extends Component {
     @property(Prefab)
@@ -101,7 +98,7 @@ export class GameManager extends Component {
                 id: i,
                 name: `鱘龍${i}號`,
                 gender: i % 2 === 0 ? "female" : "male",
-                stage: 1,
+                stage: 3,
                 growthDaysRequired: 10,
                 growthDaysPassed: 0,
                 lastFedDate: new Date().toISOString(),
@@ -120,7 +117,8 @@ export class GameManager extends Component {
                     cold: false,
                     sick: false,
                 },
-                emotion: "happy"
+                emotion: "happy",
+                isDead: false
             });
         }
 
@@ -170,44 +168,48 @@ export class GameManager extends Component {
 
         const lastLogin = playerData.lastLoginDate || today;
         const daysPassed = Math.floor((Date.parse(today) - Date.parse(lastLogin)) / (1000 * 60 * 60 * 24));
-        if (daysPassed <= 0) return;
+
+        const stageRequirements = {
+            1: 10,  // 第1階段 10天
+            2: 20,  // 第2階段 20天
+            3: 40,  // 第3階段 40天
+            4: 50,  // 第4階段 50天
+            5: 60,  // 第5階段 60天
+            6: 999, // 第6階段後無上限
+        };
+        
+        if (daysPassed <= 0) return;  // 今天已經處理過
 
         for (const fish of playerData.fishList) {
             if (fish.isDead) continue;
 
-            const lastFedTime = new Date(fish.lastFedDate).getTime();
-            const nowTime = now.getTime();
-            const hoursSinceFed = (nowTime - lastFedTime) / (1000 * 60 * 60);
-
-            // 飢餓值 = 小時數 / 72 × 100，最多不超過 100
-            fish.hunger = Math.min(100, Math.floor((hoursSinceFed / 72) * 100));
-
-            // 判斷是否死亡
-            if (fish.hunger >= 100) {
-                fish.isDead = true;
-                fish.hunger = 100;
-                fish.emotion = "hungry";
-            }
-
-            // 成長與升級
+            // 累積天數
             fish.growthDaysPassed += daysPassed;
+
+            // 升級邏輯：檢查是否達到升級的條件
             if (fish.growthDaysPassed >= fish.growthDaysRequired && fish.stage < 6) {
-                fish.stage++;
-                fish.growthDaysPassed = 0;
+                fish.stage++;  // 升級
+                fish.growthDaysPassed = 0;  // 重置成長天數
+                fish.growthDaysRequired = stageRequirements[fish.stage] || 999;  // 更新每個階段需要的天數
 
-                const nextGrowthMap = { 1: 10, 2: 20, 3: 40, 4: 50, 5: 60 };
-                fish.growthDaysRequired = nextGrowthMap[fish.stage] || 999;
+                console.log(`${fish.name} 升級到第 ${fish.stage} 階！`);
+
+                // 根據升級後的階段更新魚的外觀
+                const fishNode = this.fishArea.getChildByName(`Fish_${fish.id}`);
+                const swimmingFish = fishNode?.getComponent(SwimmingFish);
+                if (swimmingFish) {
+                    swimmingFish.updateFishAppearance(fish);
+                }
+                
+
             }
-
             // 更新情緒
-            if (!fish.isDead) {
-                fish.emotion = fish.hunger >= 80 ? "hungry" : "happy";
-            }
+            fish.emotion = fish.hunger >= 80 ? "hungry" : "happy";
         }
 
         playerData.lastLoginDate = today;
         localStorage.setItem('playerData', JSON.stringify(playerData));
-        console.log(`📅 經過 ${daysPassed} 天，魚狀態已更新`);
+        console.log(`經過 ${daysPassed} 天，魚狀態已更新`);
     }
 
 
@@ -221,10 +223,15 @@ export class GameManager extends Component {
         const width = fishAreaTransform.width;
         const height = fishAreaTransform.height;
 
-        const margin = 50;  // 安全邊距，避免魚貼邊出現
+        const margin = 50;  
 
         for (const fish of fishList) {
             const fishNode = instantiate(this.swimmingFishPrefab);
+            const swimmingFish = fishNode.getComponent(SwimmingFish);
+            if (swimmingFish) {
+                swimmingFish.setFishData(fish);  
+            }
+
             fishNode.name = `Fish_${fish.id}`;
 
             // 隨機生成位置（保留邊距）
@@ -237,12 +244,17 @@ export class GameManager extends Component {
             fishNode.setScale(new Vec3(initialDirection, 1, 1)); // 預設用 scale 反映方向
             fishNode["initialDirection"] = initialDirection;     // 傳給 SwimmingFish 用
 
+            // 將魚的資料存到節點上
+            fishNode["fishData"] = fish; 
+
             // 加到魚區上
             this.fishArea.addChild(fishNode);
+            console.log(`生成魚 ${fish.name}，位置 (${randX}, ${randY})，階段 ${fish.stage}`);
+
         }
+        
     }
 
-    
     /** 遊戲開始時執行的初始化流程 */
     start() {
         this.initPlayerData();   // 初始化玩家資料

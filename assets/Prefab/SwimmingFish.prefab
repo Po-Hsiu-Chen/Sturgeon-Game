@@ -306,10 +306,7 @@
       "b": 255,
       "a": 255
     },
-    "_spriteFrame": {
-      "__uuid__": "57520716-48c8-4a19-8acf-41c9f8777fb0@f9941",
-      "__expectedType__": "cc.SpriteFrame"
-    },
+    "_spriteFrame": null,
     "_type": 0,
     "_fillType": 0,
     "_sizeMode": 1,
@@ -1093,6 +1090,31 @@
     "__prefab": {
       "__id__": 47
     },
+    "fishSprite": {
+      "__id__": 6
+    },
+    "fishSprites": [
+      {
+        "__uuid__": "ca1c4300-5ea8-4649-8ac3-5f1a74b2c0a6@f9941",
+        "__expectedType__": "cc.SpriteFrame"
+      },
+      {
+        "__uuid__": "4af1ef35-289d-4716-a9c9-9a2e2d367fc1@f9941",
+        "__expectedType__": "cc.SpriteFrame"
+      },
+      {
+        "__uuid__": "81d21ac9-da76-4e91-b18a-7e67e161fd81@f9941",
+        "__expectedType__": "cc.SpriteFrame"
+      },
+      {
+        "__uuid__": "6d923967-b165-4d28-8c9f-4cc13390750d@f9941",
+        "__expectedType__": "cc.SpriteFrame"
+      },
+      {
+        "__uuid__": "83a0cc99-b9eb-4be3-9da4-ca56f03f08d9@f9941",
+        "__expectedType__": "cc.SpriteFrame"
+      }
+    ],
     "_id": ""
   },
   {

@@ -16,6 +16,8 @@ export class UIManager extends Component {
     @property(Label)
     daysLabel: Label = null!;
     @property(Label)
+    stageLabel: Label = null!;
+    @property(Label)
     hungerLabel: Label = null!;
     @property(Sprite)
     fishStatusImage: Sprite = null!;
@@ -52,6 +54,7 @@ export class UIManager extends Component {
         this.fishNameLabel.string = fish.name;
         this.genderLabel.string = `性別：${fish.gender === 'male' ? '公' : '母'}`;
         this.daysLabel.string = `已成長天數：${fish.growthDaysPassed}`;
+        this.stageLabel.string = `階段：${fish.stage}`;
         this.hungerLabel.string = `飢餓值：${Math.floor(fish.hunger)} / 100`;
 
         const playerData = JSON.parse(localStorage.getItem("playerData"));
