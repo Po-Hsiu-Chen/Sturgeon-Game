@@ -1,7 +1,7 @@
 [
   {
     "__type__": "cc.Prefab",
-    "_name": "Fry",
+    "_name": "fry",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_native": "",
@@ -13,7 +13,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "Fry",
+    "_name": "fry",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": null,
@@ -63,7 +63,7 @@
       "__type__": "cc.Vec3",
       "x": 1,
       "y": 1,
-      "z": 0.195
+      "z": 1
     },
     "_mobility": 0,
     "_layer": 33554432,
@@ -623,7 +623,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 100,
-      "height": 100
+      "height": 46.4
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
