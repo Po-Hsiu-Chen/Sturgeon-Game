@@ -2,12 +2,12 @@
   "ver": "1.1.50",
   "importer": "prefab",
   "imported": true,
-  "uuid": "6991db07-dd30-41b3-ad72-46a66d3ff731",
+  "uuid": "6ab6661d-6b3b-466f-9544-0997626c82f6",
   "files": [
     ".json"
   ],
   "subMetas": {},
   "userData": {
-    "syncNodeName": "SwimmingFish"
+    "syncNodeName": "Fry"
   }
 }

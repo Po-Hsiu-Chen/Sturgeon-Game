@@ -76,11 +76,12 @@ interface PlayerData {
 
 @ccclass('GameManager')
 export class GameManager extends Component {
-    @property(Prefab)
-    swimmingFishPrefab: Prefab = null!;  // 魚的 Prefab
 
     @property(Node)
-    fishArea: Node = null!;              // 魚可以活動的區域
+    fishArea: Node = null!;  // 魚可以活動的區域
+
+    @property([Prefab])
+    fishPrefabsByStage: Prefab[] = [];  // 1~6 階魚 Prefab
 
     /** 初始化玩家資料（只執行一次） */
     initPlayerData() {
@@ -98,7 +99,7 @@ export class GameManager extends Component {
                 id: i,
                 name: `鱘龍${i}號`,
                 gender: i % 2 === 0 ? "female" : "male",
-                stage: 3,
+                stage: 2,
                 growthDaysRequired: 10,
                 growthDaysPassed: 0,
                 lastFedDate: new Date().toISOString(),
@@ -197,10 +198,6 @@ export class GameManager extends Component {
                 // 根據升級後的階段更新魚的外觀
                 const fishNode = this.fishArea.getChildByName(`Fish_${fish.id}`);
                 const swimmingFish = fishNode?.getComponent(SwimmingFish);
-                if (swimmingFish) {
-                    swimmingFish.updateFishAppearance(fish);
-                }
-                
 
             }
             // 更新情緒
@@ -218,42 +215,42 @@ export class GameManager extends Component {
         const playerData = JSON.parse(localStorage.getItem('playerData'));
         const fishList = playerData.fishList;
 
-        // 取得魚區的寬高資訊
         const fishAreaTransform = this.fishArea.getComponent(UITransform);
         const width = fishAreaTransform.width;
         const height = fishAreaTransform.height;
-
-        const margin = 50;  
+        const margin = 50;
 
         for (const fish of fishList) {
-            const fishNode = instantiate(this.swimmingFishPrefab);
+            // 根據階段取得對應 prefab
+            const prefab = this.fishPrefabsByStage[fish.stage - 1];
+            if (!prefab) {
+                console.warn(`找不到階段 ${fish.stage} 對應的魚 prefab`);
+                continue;
+            }
+
+            const fishNode = instantiate(prefab);
             const swimmingFish = fishNode.getComponent(SwimmingFish);
             if (swimmingFish) {
-                swimmingFish.setFishData(fish);  
+                swimmingFish.setFishData(fish);
             }
 
             fishNode.name = `Fish_${fish.id}`;
-
-            // 隨機生成位置（保留邊距）
+            
+            // 隨機生成位置
             const randX = Math.random() * (width - margin * 2) - (width / 2 - margin);
             const randY = Math.random() * (height - margin * 2) - (height / 2 - margin);
             fishNode.setPosition(randX, randY, 0);
 
-            // 隨機方向（初始朝左或朝右）
+            // 隨機方向
             const initialDirection = Math.random() > 0.5 ? 1 : -1;
-            fishNode.setScale(new Vec3(initialDirection, 1, 1)); // 預設用 scale 反映方向
-            fishNode["initialDirection"] = initialDirection;     // 傳給 SwimmingFish 用
+            fishNode.setScale(new Vec3(initialDirection, 1, 1));
+            fishNode["initialDirection"] = initialDirection;
 
-            // 將魚的資料存到節點上
-            fishNode["fishData"] = fish; 
-
-            // 加到魚區上
             this.fishArea.addChild(fishNode);
-            console.log(`生成魚 ${fish.name}，位置 (${randX}, ${randY})，階段 ${fish.stage}`);
-
+            console.log(`生成魚 ${fish.name}（階段 ${fish.stage}）於 (${randX}, ${randY})`);
         }
-        
     }
+
 
     /** 遊戲開始時執行的初始化流程 */
     start() {

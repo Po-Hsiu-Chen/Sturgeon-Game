@@ -1,4 +1,4 @@
-import { _decorator, Component, Vec3, Node, find, UITransform, Sprite, SpriteFrame } from 'cc';
+import { _decorator, Component, Vec3, Node, find, UITransform, Sprite, SpriteFrame, Prefab } from 'cc';
 import { UIManager } from './UIManager';
 import type { FishData } from './GameManager';
 
@@ -6,19 +6,13 @@ const { ccclass, property } = _decorator;
 
 @ccclass('SwimmingFish')
 export class SwimmingFish extends Component {
-    /** 設定於編輯器的屬性 */
-    @property(Sprite)
-    fishSprite: Sprite = null!;  // 魚的 Sprite，用來顯示圖片
-    @property([SpriteFrame])
-    fishSprites: SpriteFrame[] = []; // 不同階段對應的圖片集
-
     /** 與魚資料相關的屬性 */
     public fishData: FishData = null!;  // 魚的資料（從 GameManager 傳入）
     static currentSelectedFish: SwimmingFish | null = null;  // 目前被選中的魚
 
     /** 移動邏輯控制 */
     private isMovingRight = false;            // 目前是否朝右移動
-    private speed = 120;                      // 移動速度
+    private speed = 80;                      // 移動速度
     private fishAreaWorldLeft = 0;            // 可移動區域 - 左邊界
     private fishAreaWorldRight = 0;           // 可移動區域 - 右邊界
 
@@ -72,28 +66,6 @@ export class SwimmingFish extends Component {
 
     public setFishData(fish: FishData) {
         this.fishData = fish;
-        this.updateFishAppearance(fish);
-    }
-
-    updateFishAppearance(fish: FishData) {
-        if (fish.stage >= 1 && fish.stage <= this.fishSprites.length) {
-            this.fishSprite.spriteFrame = this.fishSprites[fish.stage - 1];
-        }
-
-        // 根據階段設定不同大小
-        const scaleByStage = {
-            1: new Vec3(0.7, 0.7, 1), // 魚卵
-            2: new Vec3(0.7, 0.4, 1), // 魚苗
-            3: new Vec3(1.0, 0.6, 1), // 幼魚
-            4: new Vec3(1.1, 0.8, 1), // 小魚
-            5: new Vec3(1.2, 0.9, 1), // 中魚
-            6: new Vec3(1.3, 1.0, 1), // 大魚
-        };
-
-        const scale = scaleByStage[fish.stage] || new Vec3(1, 1, 1);
-        this.fishSprite.node.setScale(scale);
-
-        console.log(`設定 ${fish.name} 為第 ${fish.stage} 階外觀與大小：`, scale);
     }
 
     onClickFish() {

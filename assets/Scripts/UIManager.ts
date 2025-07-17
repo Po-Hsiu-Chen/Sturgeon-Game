@@ -1,4 +1,5 @@
 import { _decorator, Component, Node, Label, Sprite, SpriteFrame } from 'cc';
+import { SwimmingFish } from './SwimmingFish';
 const { ccclass, property } = _decorator;
 
 @ccclass('UIManager')
@@ -110,6 +111,7 @@ export class UIManager extends Component {
 
     closeFishDetail() {
         this.fishDetailPanel.active = false;
+        SwimmingFish.clearSelection();
     }
 
     start() {
