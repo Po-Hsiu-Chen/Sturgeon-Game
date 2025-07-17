@@ -1,6 +1,6 @@
 import { _decorator, Component, Vec3, Node, find, UITransform, Sprite, SpriteFrame, Prefab } from 'cc';
 import { UIManager } from './UIManager';
-import type { FishData } from './GameManager';
+import type { FishData } from './DataManager';
 
 const { ccclass, property } = _decorator;
 
