@@ -1,5 +1,6 @@
-import { _decorator, Component, Node, Sprite, Color, Label, Button, sys } from 'cc';
+import { _decorator, Component, Node, Sprite, Color, Label, Button, sys, Prefab, SpriteFrame, instantiate, UITransform } from 'cc';
 import { DataManager } from './DataManager';
+import { RewardPopup } from './RewardPopup';
 const { ccclass, property } = _decorator;
 
 enum DayStatus {
@@ -24,6 +25,22 @@ export class SignInManager extends Component {
     @property(Button)
     claimButton: Button = null!;
 
+    @property(Prefab)
+    rewardPopupPrefab: Prefab = null!;  
+
+    @property(SpriteFrame)
+    dragonBoneIconSpriteFrame: SpriteFrame = null!;
+
+    @property(SpriteFrame)
+    premiumFeedIconSpriteFrame: SpriteFrame = null!;
+
+    @property(SpriteFrame)
+    defaultIcon: SpriteFrame = null!;
+
+    @property(Label)
+    signInHintLabel: Label = null!;
+
+
     private todayIndex: number = 0;
     private playerData: any;
 
@@ -37,13 +54,19 @@ export class SignInManager extends Component {
 
         // 如果今天還沒簽到，開啟面板
         const today = new Date().toISOString().split('T')[0];
-        if (this.playerData.signInData.weekly.lastSignDate !== today) {
-            console.log("今日未簽到");
-            this.showPanel();
-        } else {
+
+        if (this.playerData.signInData.weekly.lastSignDate === today) {
             console.log("今日已簽到");
-            this.hidePanel(); // 預設收起來
+            this.claimButton.interactable = false; // 禁用按鈕
+            this.signInHintLabel.string = "今日已簽到";
+            this.hidePanel();
+        } else {
+            console.log("今日未簽到");
+            this.claimButton.interactable = true; // 啟用按鈕
+            this.signInHintLabel.string = "答題簽到";
+            this.showPanel();
         }
+
     }
 
     /** 取得今天是週幾（週一 = 0） */
@@ -58,11 +81,13 @@ export class SignInManager extends Component {
         const storedWeek = this.playerData.signInData.weekly.weekIndex;
 
         if (currentWeek !== storedWeek) {
-            // reset
-            this.playerData.signInData.weekly.weekIndex = currentWeek;
-            this.playerData.signInData.weekly.daysSigned = [false, false, false, false, false, false, false];
-            this.playerData.signInData.weekly.questionsCorrect = [false, false, false, false, false, false, false];
-            this.playerData.signInData.weekly.lastSignDate = '';
+            console.log('新的一週開始，重置週簽到資料');
+            this.playerData.signInData.weekly = {
+                weekIndex: currentWeek,
+                daysSigned: [false, false, false, false, false, false, false],
+                questionsCorrect: [false, false, false, false, false, false, false],
+                lastSignDate: ''
+            };
             this.savePlayerData();
         }
     }
@@ -75,18 +100,12 @@ export class SignInManager extends Component {
         return Math.floor(days / 7);
     }
 
-    /** 載入玩家資料 */
-    loadPlayerData() {
-        const data = localStorage.getItem('playerData');
-        this.playerData = data ? JSON.parse(data) : null;
-    }
-
     /** 儲存玩家資料 */
     async savePlayerData() {
         await DataManager.savePlayerData(this.playerData);
     }
 
-    /** 更新 UI 樣式 */
+    /** 更新 UI */
     updateSignInUI() {
         for (let i = 0; i < this.dayBgSprites.length; i++) {
             const sprite = this.dayBgSprites[i];
@@ -114,7 +133,7 @@ export class SignInManager extends Component {
     applyStyle(sprite: Sprite | null, label: Label | null, status: DayStatus) {
         switch (status) {
             case DayStatus.Signed:
-                sprite.color = new Color(180, 255, 180); // 淺綠
+                sprite.color = new Color(180, 255, 180); // 綠
                 label.string = "✔ 已簽";
                 break;
             case DayStatus.Today:
@@ -122,16 +141,28 @@ export class SignInManager extends Component {
                 label.string = "今天";
                 break;
             case DayStatus.Missed:
-                sprite.color = new Color(150, 150, 150); // 灰
+                sprite.color = new Color(255, 143, 143); // 紅
                 label.string = "未簽";
                 break;
             case DayStatus.Future:
-                sprite.color = new Color(224, 221, 222); // 淺灰
+                sprite.color = new Color(224, 221, 222); // 灰
                 label.string = "未來";
                 break;
         }
     }
 
+    getIconSpriteFrame(key: string): SpriteFrame {
+        // 根據 key 傳出對應 SpriteFrame
+        // 你可以自己用 SpriteAtlas 或一張張圖做對應
+        switch (key) {
+            case 'dragonbone':
+                return this.dragonBoneIconSpriteFrame;
+            case 'premium_feed':
+                return this.premiumFeedIconSpriteFrame;
+            default:
+                return this.defaultIcon;
+        }
+    }
 
     /** 處理簽到按鈕點擊（含答題邏輯） */
     onClaimButtonClick() {
@@ -162,6 +193,25 @@ export class SignInManager extends Component {
             this.playerData.inventory.feeds.premium += 1;
             console.log("今日為第七天，發送一包高級飼料！");
         }
+        
+        // 建立要顯示的獎勵資料
+        const rewards = [
+            { icon: this.getIconSpriteFrame('dragonbone'), name: '龍骨', count: finalReward }
+        ];
+
+        if (this.todayIndex === 6) {
+            rewards.push({
+                icon: this.getIconSpriteFrame('premium_feed'),
+                name: '高級飼料',
+                count: 1
+            });
+        }
+
+        // 顯示獎勵彈窗動畫
+        const popup = instantiate(this.rewardPopupPrefab);
+        popup.getComponent(RewardPopup).showRewards(rewards);
+        this.node.getComponent(UITransform).node.parent!.addChild(popup);
+
 
         // 月簽到：累積一天
         const now = new Date();
@@ -180,9 +230,11 @@ export class SignInManager extends Component {
         this.savePlayerData();
         this.updateSignInUI();
 
-        console.log(`簽到成功：+${finalReward} 龍骨，答題${answeredCorrectly ? "✔正確（雙倍）" : "✘錯誤（正常）"}`);
+        this.claimButton.interactable = false;
+        this.signInHintLabel.string = "今日已簽到";
     }
 
+    
     /** 顯示簽到面板 */
     showPanel() {
         this.node.active = true;

@@ -11,7 +11,7 @@
     "6c48a": {
       "importer": "texture",
       "uuid": "7eacd282-3666-460b-8eef-4238126bc34c@6c48a",
-      "displayName": "Background_1",
+      "displayName": "FishTank1",
       "id": "6c48a",
       "name": "texture",
       "userData": {
@@ -35,7 +35,7 @@
     "f9941": {
       "importer": "sprite-frame",
       "uuid": "7eacd282-3666-460b-8eef-4238126bc34c@f9941",
-      "displayName": "Background_1",
+      "displayName": "FishTank1",
       "id": "f9941",
       "name": "spriteFrame",
       "userData": {
