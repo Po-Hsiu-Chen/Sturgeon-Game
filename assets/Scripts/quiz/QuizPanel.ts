@@ -1,0 +1,121 @@
+import { _decorator, Component, Node, Label, Button, Sprite, Color, SpriteFrame } from 'cc';
+import { tween, Vec3 } from 'cc';
+const { ccclass, property } = _decorator;
+
+@ccclass('QuizPanel')
+export class QuizPanel extends Component {
+    @property(Label)
+    questionLabel: Label = null!;
+
+    @property([Button])
+    optionButtons: Button[] = [];
+
+    @property(SpriteFrame)
+    correctIconSpriteFrame: SpriteFrame = null!;
+
+    @property(SpriteFrame)
+    wrongIconSpriteFrame: SpriteFrame = null!;
+
+    private resolveAnswer!: (correct: boolean) => void;
+    private correctIndex: number = 0;
+    private isCorrect: boolean = false;
+
+    /** 顯示題目，返回使用者是否答對 (固定4選項)*/
+    setup(questionData: { question: string, options: string[], answerIndex: number }): Promise<boolean> {
+        this.questionLabel.string = questionData.question;
+
+        const options = this.shuffleArray([...questionData.options]);
+        this.correctIndex = options.indexOf(questionData.options[questionData.answerIndex]);
+
+        const prefix = ['A. ', 'B. ', 'C. ', 'D. '];
+
+        for (let i = 0; i < this.optionButtons.length; i++) {
+            const btn = this.optionButtons[i];
+            const label = btn.getComponentInChildren(Label);
+            label.string = prefix[i] + options[i];
+
+            // 清除之前的事件
+            btn.node.off(Node.EventType.MOUSE_ENTER);
+            btn.node.off(Node.EventType.MOUSE_LEAVE);
+            btn.node.off('click');
+
+            // 綁定 hover 效果
+            btn.node.on(Node.EventType.MOUSE_ENTER, () => {
+                if (btn.interactable) {
+                    btn.node.getComponent(Sprite)!.color = new Color(213, 239, 255); // Hover顏色
+                }
+            });
+            btn.node.on(Node.EventType.MOUSE_LEAVE, () => {
+                if (btn.interactable) {
+                    btn.node.getComponent(Sprite)!.color = new Color(226, 244, 255); // 還原顏色
+                }
+            });
+
+            // 綁定點擊
+            btn.node.once('click', () => this.onSelect(i));
+        }
+
+        return new Promise<boolean>((resolve) => {
+            this.resolveAnswer = resolve;
+        });
+    }
+
+    onSelect(index: number) {
+        this.isCorrect = index === this.correctIndex;
+        
+
+        // 顯示紅綠色
+        const btn = this.optionButtons[index];
+        btn.node.getComponent(Sprite)!.color = this.isCorrect
+            ? new Color(102, 204, 154)
+            : new Color(255, 50, 51);
+        
+        // 選項動畫
+        if (this.isCorrect) {
+            tween(btn.node)
+                .to(0.1, { scale: new Vec3(1.05, 1.05, 1) })
+                .to(0.1, { scale: new Vec3(1, 1, 1) })
+                .start();
+        } else {
+            const originalPos = btn.node.position.clone();
+            const shakeAmount = 10;
+            const shakeDuration = 0.05;
+
+            let shake = tween(btn.node);
+            for (let i = 0; i < 3; i++) {
+                shake = shake
+                    .to(shakeDuration, { position: new Vec3(originalPos.x + (i % 2 === 0 ? shakeAmount : -shakeAmount), originalPos.y, originalPos.z) })
+                    .to(shakeDuration, { position: originalPos });
+            }
+            shake.start();
+        }
+
+        // 正確或錯誤圖示
+        const sprites = btn.getComponentsInChildren(Sprite);
+        const resultIcon = sprites.find(s => s.node !== btn.node);
+        if (resultIcon) {
+            resultIcon.spriteFrame = this.isCorrect
+                ? this.correctIconSpriteFrame  
+                : this.wrongIconSpriteFrame;   
+            resultIcon.node.active = true;
+        }
+
+        // 禁用所有選項
+        this.optionButtons.forEach(b => b.interactable = false);
+
+        // 顯示幾秒再回傳結果並關閉面板
+        this.scheduleOnce(() => {
+            this.resolveAnswer(this.isCorrect); // 等動畫後才回傳
+            this.node.destroy();                // 再關閉面板
+        }, 3);
+    }
+
+
+    private shuffleArray<T>(array: T[]): T[] {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+}

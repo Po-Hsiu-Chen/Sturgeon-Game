@@ -17,47 +17,67 @@ export class GameManager extends Component {
     async processDailyUpdate() {
         const playerData = await DataManager.getPlayerData();
         const now = new Date();
-        const today = now.toISOString().split('T')[0];
 
-        const lastLogin = playerData.lastLoginDate || today;
-        const daysPassed = Math.floor((Date.parse(today) - Date.parse(lastLogin)) / (1000 * 60 * 60 * 24));
+        const today = now.toISOString().split('T')[0];  // 只取日期部分
+        const lastLoginDate = playerData.lastLoginDate || today;
+        const lastLoginTime = new Date(playerData.lastLoginTime || now);  // 時間部分
 
+        // 計算時間差
+        const msDiff = now.getTime() - lastLoginTime.getTime();
+        const hoursPassed = msDiff / (1000 * 60 * 60);  // 精準到小時
+        const daysPassed = Math.floor((Date.parse(today) - Date.parse(lastLoginDate)) / (1000 * 60 * 60 * 24));  // 整天
+
+        const hungerPerHour = 100 / 72;  // 每小時增加的飢餓值
         const stageRequirements = {
-            1: 10,  // 第1階段 10天
-            2: 20,  // 第2階段 20天
-            3: 40,  // 第3階段 40天
-            4: 50,  // 第4階段 50天
-            5: 60,  // 第5階段 60天
-            6: 999, // 第6階段後無上限
+            1: 10,
+            2: 20,
+            3: 40,
+            4: 50,
+            5: 60,
+            6: 999,
         };
-        
-        if (daysPassed <= 0) return;  // 今天已經處理過
 
         for (const fish of playerData.fishList) {
             if (fish.isDead) continue;
 
-            // 累積天數
-            fish.growthDaysPassed += daysPassed;
+            // 飢餓更新
+            fish.hunger += hoursPassed * hungerPerHour;
+            fish.hunger = Math.min(fish.hunger, 100);
 
-            // 升級邏輯：檢查是否達到升級的條件
-            if (fish.growthDaysPassed >= fish.growthDaysRequired && fish.stage < 6) {
-                fish.stage++;  // 升級
-                fish.growthDaysPassed = 0;  // 重置成長天數
-                if (fish.stage < 6) {
-                    fish.growthDaysRequired = stageRequirements[fish.stage];
-                } 
-                console.log(`${fish.name} 升級到第 ${fish.stage} 階！`);
+            if (fish.hunger >= 100) {
+                fish.isDead = true;
+                fish.emotion = "dead";
+                console.log(`${fish.name} 因飢餓過久而死亡`);
+                continue;
             }
 
-            // 更新情緒
+            // 成長處理（只根據 calendar days）
+            if (daysPassed > 0) {
+                fish.growthDaysPassed += daysPassed;
+
+                if (fish.growthDaysPassed >= fish.growthDaysRequired && fish.stage < 6) {
+                    fish.stage++;
+                    fish.growthDaysPassed = 0;
+
+                    if (fish.stage < 6) {
+                        fish.growthDaysRequired = stageRequirements[fish.stage];
+                    }
+
+                    console.log(`${fish.name} 升級到第 ${fish.stage} 階！`);
+                }
+            }
+
+            // 情緒更新
             fish.emotion = fish.hunger >= 80 ? "hungry" : "happy";
         }
 
+        // 更新記錄的時間
         playerData.lastLoginDate = today;
-        await DataManager.savePlayerData(playerData);
-        console.log(`經過 ${daysPassed} 天，魚狀態已更新`);
-    }
+        playerData.lastLoginTime = now.toISOString();
 
+        await DataManager.savePlayerData(playerData);
+        console.log(`更新完成：經過 ${hoursPassed.toFixed(2)} 小時，飢餓與成長資料已更新`);
+    }
 
     /** 生成所有魚的實體節點 */
     async spawnAllFish() {

@@ -1,4 +1,5 @@
 import { _decorator, Component, Node } from 'cc';
+import { quizQuestions } from './quiz/QuizData';
 const { ccclass, property } = _decorator;
 
 // -------- 資料結構定義 --------
@@ -51,7 +52,8 @@ interface TankData {
 export interface PlayerData {
     id: number;                    // 玩家 ID
     dragonBones: number;           // 遊戲貨幣（龍骨）
-    lastLoginDate: string;         // 上次進入遊戲日期
+    lastLoginDate: string;         // 上次登入日期（升級用）
+    lastLoginTime: string;         // 用來計算小時差（飢餓值用）
     fishList: FishData[];          // 擁有的魚列表
     tankList: TankData[];          // 擁有的魚缸列表
     inventory: {
@@ -84,6 +86,12 @@ export interface PlayerData {
         }
     };
 
+}
+
+export interface QuizQuestion {
+    question: string;
+    options: string[];
+    answerIndex: number; // 正確答案在 options 陣列中的位置
 }
 
 export class DataManager {
@@ -142,7 +150,7 @@ export class DataManager {
 
         const newPlayer = {
             id: 1,
-            dragonBones: 100,
+            dragonBones: 666,
             lastLoginDate: new Date().toISOString().split('T')[0],
             fishList,
             tankList: [{
@@ -154,7 +162,7 @@ export class DataManager {
                 fishIds: [1, 2, 3]
             }],
             inventory: {
-                feeds: { normal: 10, premium: 1 },
+                feeds: { normal: 666, premium: 66 },
                 items: {
                     coldMedicine: 1,
                     revivePotion: 1,
@@ -189,6 +197,16 @@ export class DataManager {
         const firstDay = new Date(now.getFullYear(), 0, 1);
         const days = Math.floor((now.getTime() - firstDay.getTime()) / (1000 * 60 * 60 * 24));
         return Math.floor(days / 7);
+    }
+
+    static async getQuizQuestions(): Promise<{ question: string; options: string[]; answerIndex: number }[]> {
+        if (this.useLocalStorage) {
+            return quizQuestions;
+        } else {
+            const res = await fetch('/api/quiz');
+            const data = await res.json();
+            return data.questions;
+        }
     }
 }
 

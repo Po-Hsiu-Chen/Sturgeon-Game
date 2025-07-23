@@ -1,6 +1,8 @@
 import { _decorator, Component, Node, Sprite, Color, Label, Button, sys, Prefab, SpriteFrame, instantiate, UITransform } from 'cc';
 import { DataManager } from './DataManager';
 import { RewardPopup } from './RewardPopup';
+import { QuizPanel } from './quiz/QuizPanel';
+import { getRandomItem, shuffleArray } from './utils/utils';
 const { ccclass, property } = _decorator;
 
 enum DayStatus {
@@ -39,6 +41,9 @@ export class SignInManager extends Component {
 
     @property(Label)
     signInHintLabel: Label = null!;
+
+    @property(Prefab)
+    quizPanelPrefab: Prefab = null!;
 
 
     private todayIndex: number = 0;
@@ -165,7 +170,7 @@ export class SignInManager extends Component {
     }
 
     /** 處理簽到按鈕點擊（含答題邏輯） */
-    onClaimButtonClick() {
+    async onClaimButtonClick() {
         const today = new Date().toISOString().split('T')[0];
         const lastSign = this.playerData.signInData.weekly.lastSignDate;
 
@@ -174,18 +179,31 @@ export class SignInManager extends Component {
             return;
         }
 
-        // 模擬答題流程（這裡應換成你的問答 UI）
-        const answeredCorrectly = Math.random() < 0.5; // 假資料：隨機答對或錯
-        const doubleReward = answeredCorrectly;
+
+        // 這裡你要接 UI 顯示，暫時用 console 模擬
+        const questions = await DataManager.getQuizQuestions();
+        const randomQuestion = getRandomItem(questions);
+
+        const quizNode = instantiate(this.quizPanelPrefab);
+        this.node.parent.addChild(quizNode);
+
+        const quiz = quizNode.getComponent(QuizPanel);
+        const isCorrect = await quiz.setup(randomQuestion);
+
+        // 根據答對與否處理簽到
+        if (isCorrect) {
+            console.log("答對了！給雙倍獎勵");
+        } else {
+            console.log("答錯了！給基本獎勵");
+        }
 
         // 更新資料
         this.playerData.signInData.weekly.lastSignDate = today;
         this.playerData.signInData.weekly.daysSigned[this.todayIndex] = true;
-        this.playerData.signInData.weekly.questionsCorrect[this.todayIndex] = answeredCorrectly;
 
         // 發獎勵
         let baseReward = 10;
-        let finalReward = doubleReward ? baseReward * 2 : baseReward;
+        let finalReward = isCorrect ? baseReward * 2 : baseReward;
         this.playerData.dragonBones += finalReward;
 
         if (this.todayIndex === 6) {

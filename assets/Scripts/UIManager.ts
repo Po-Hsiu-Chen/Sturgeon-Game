@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Label, Sprite, SpriteFrame } from 'cc';
+import { _decorator, Component, Node, Label, Sprite, SpriteFrame, EditBox } from 'cc';
 import { SwimmingFish } from './SwimmingFish';
 const { ccclass, property } = _decorator;
 
@@ -44,6 +44,18 @@ export class UIManager extends Component {
     happySprite: SpriteFrame = null!;
     @property(SpriteFrame)
     sadSprite: SpriteFrame = null!;
+
+    // 改名字相關
+    @property(Node)
+    RenamePanel: Node = null!;
+    @property(EditBox)
+    renameInput: EditBox = null!;
+    @property(Node)
+    renameConfirmButton: Node = null!;
+    @property(Node)
+    renameCancelButton: Node = null!;
+    @property(Node)
+    renameButton: Node = null!; // 玩家點這個來開啟 RenamePanel
 
     private currentFishId: number = -1;
 
@@ -109,13 +121,54 @@ export class UIManager extends Component {
         this.showFishDetail(fish); 
     }
 
+    hideAllSubPanels() {
+        this.RenamePanel.active = false;
+        // 之後所有需要關起來的 panel
+    }
+    
     closeFishDetail() {
         this.fishDetailPanel.active = false;
+        this.hideAllSubPanels(); 
         SwimmingFish.clearSelection();
+    }
+
+    showRenamePanel() {
+        const playerData = JSON.parse(localStorage.getItem('playerData'));
+        const fish = playerData.fishList.find(f => f.id === this.currentFishId);
+        if (!fish) return;
+
+        this.renameInput.string = fish.name;
+        this.RenamePanel.active = true;
+    }
+
+    hideRenamePanel() {
+        this.RenamePanel.active = false;
+    }
+
+    renameFish() {
+        const newName = this.renameInput.string.trim();
+        if (!newName) {
+            console.warn("名字不能為空！");
+            return;
+        }
+
+        const playerData = JSON.parse(localStorage.getItem('playerData'));
+        const fish = playerData.fishList.find(f => f.id === this.currentFishId);
+        if (!fish) return;
+
+        fish.name = newName;
+        localStorage.setItem('playerData', JSON.stringify(playerData));
+
+        this.hideRenamePanel();
+        this.showFishDetail(fish); // 更新畫面
     }
 
     start() {
         this.closeButton.on(Node.EventType.TOUCH_END, this.closeFishDetail, this);
+
+        this.renameButton.on(Node.EventType.TOUCH_END, this.showRenamePanel, this);
+        this.renameConfirmButton.on(Node.EventType.TOUCH_END, this.renameFish, this);
+        this.renameCancelButton.on(Node.EventType.TOUCH_END, this.hideRenamePanel, this);
     }
 
 }
