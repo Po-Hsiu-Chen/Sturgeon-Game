@@ -1,4 +1,4 @@
-import { _decorator, Component, Vec3, Node, find, UITransform, Sprite, SpriteFrame, Prefab } from 'cc';
+import { _decorator, Component, Vec3, Node, find, UITransform, Sprite, SpriteFrame, Prefab, tween } from 'cc';
 import { UIManager } from './UIManager';
 import type { FishData } from './DataManager';
 
@@ -83,6 +83,12 @@ export class SwimmingFish extends Component {
 
             // 顯示新的泡泡並設定選中魚
             this.emotionBubble.active = true;
+            this.emotionBubble.setScale(new Vec3(0.3, 0.3, 1)); // 初始化縮小
+
+            tween(this.emotionBubble)
+                .to(0.25, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' })
+                .start();
+
             SwimmingFish.currentSelectedFish = this;
         }
     }

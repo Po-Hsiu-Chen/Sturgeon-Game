@@ -107,7 +107,7 @@ export class QuizPanel extends Component {
         this.scheduleOnce(() => {
             this.resolveAnswer(this.isCorrect); // 等動畫後才回傳
             this.node.destroy();                // 再關閉面板
-        }, 3);
+        }, 2);
     }
 
 
