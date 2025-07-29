@@ -175,14 +175,14 @@ export class DataManager {
             signInData: {
                 weekly: {
                     weekIndex: this.getCurrentWeekIndex(),
-                    daysSigned: [false, false, false, false, false, false, false],
+                    daysSigned: [false, false, true, true, false, false, false],
                     questionsCorrect: [false, false, false, false, false, false, false],
                     lastSignDate: ""
                 },
                 monthly: {
                     month: new Date().getMonth() + 1,
                     year: new Date().getFullYear(),
-                    signedDaysCount: 0
+                    signedDaysCount: 5
                 }
             }
         };

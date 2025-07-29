@@ -13,7 +13,7 @@ enum DayStatus {
 }
 
 @ccclass('SignInManager')
-export class SignInManager extends Component {
+export class WeeklySignInManager extends Component {
 
     @property(Label)
     monthlyCountLabel: Label = null!;
@@ -76,7 +76,8 @@ export class SignInManager extends Component {
 
     /** 取得今天是週幾（週一 = 0） */
     getTodayIndex(): number {
-        const day = new Date().getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+        const day = 6;
+        //const day = new Date().getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
         return (day + 6) % 7; // 轉換為 Mon=0, ..., Sun=6
     }
 
