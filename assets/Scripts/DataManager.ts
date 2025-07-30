@@ -34,7 +34,7 @@ export interface FishData {
     isMarried: boolean;                 // 是否已婚
     spouseId: number | null;            // 配偶 ID
     status: FishStatus;                 // 即時狀態
-    emotion: "happy" | "sad" | "angry" | "hungry" | "cold" | "hot";  // 情緒狀態
+    emotion: "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "dead";  // 情緒狀態
     isDead: boolean;                     // 是否死了
 }
 
@@ -174,8 +174,10 @@ export class DataManager {
             fashion: { owned: [] },
             signInData: {
                 weekly: {
+                    //weekIndex: 29, // 測試用
+                    //daysSigned: [false, false, false, false, false, false, true], // 測試用
                     weekIndex: this.getCurrentWeekIndex(),
-                    daysSigned: [false, false, true, true, false, false, false],
+                    daysSigned: [false, false, false, false, false, false, false],
                     questionsCorrect: [false, false, false, false, false, false, false],
                     lastSignDate: ""
                 },

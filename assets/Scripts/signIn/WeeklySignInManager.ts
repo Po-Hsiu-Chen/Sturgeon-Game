@@ -1,8 +1,8 @@
 import { _decorator, Component, Node, Sprite, Color, Label, Button, sys, Prefab, SpriteFrame, instantiate, UITransform } from 'cc';
-import { DataManager } from './DataManager';
-import { RewardPopup } from './RewardPopup';
-import { QuizPanel } from './quiz/QuizPanel';
-import { getRandomItem, shuffleArray } from './utils/utils';
+import { DataManager } from '../DataManager';
+import { RewardPopup } from '../RewardPopup';
+import { QuizPanel } from '../quiz/QuizPanel';
+import { getRandomItem, shuffleArray } from '../utils/utils';
 const { ccclass, property } = _decorator;
 
 enum DayStatus {
@@ -12,11 +12,8 @@ enum DayStatus {
     Signed
 }
 
-@ccclass('SignInManager')
+@ccclass('WeeklySignInManager')
 export class WeeklySignInManager extends Component {
-
-    @property(Label)
-    monthlyCountLabel: Label = null!;
 
     @property(Sprite)
     dayBgSprites: Sprite[] = [];
@@ -57,27 +54,23 @@ export class WeeklySignInManager extends Component {
         this.updateSignInUI();
         this.claimButton.node.on('click', this.onClaimButtonClick, this);
 
-        // 如果今天還沒簽到，開啟面板
+        // 是否已簽到
         const today = new Date().toISOString().split('T')[0];
 
         if (this.playerData.signInData.weekly.lastSignDate === today) {
-            console.log("今日已簽到");
             this.claimButton.interactable = false; // 禁用按鈕
             this.signInHintLabel.string = "今日已簽到";
-            this.hidePanel();
         } else {
-            console.log("今日未簽到");
             this.claimButton.interactable = true; // 啟用按鈕
             this.signInHintLabel.string = "答題簽到";
-            this.showPanel();
         }
 
     }
 
     /** 取得今天是週幾（週一 = 0） */
     getTodayIndex(): number {
-        const day = 6;
-        //const day = new Date().getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+        //const day = 6; // 測試用
+        const day = new Date().getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
         return (day + 6) % 7; // 轉換為 Mon=0, ..., Sun=6
     }
 
@@ -86,6 +79,9 @@ export class WeeklySignInManager extends Component {
         const currentWeek = this.getCurrentWeekIndex();
         const storedWeek = this.playerData.signInData.weekly.weekIndex;
 
+        console.log("本週週數 =", currentWeek);
+        console.log("玩家資料週數 =", storedWeek);
+        
         if (currentWeek !== storedWeek) {
             console.log('新的一週開始，重置週簽到資料');
             this.playerData.signInData.weekly = {
@@ -101,9 +97,15 @@ export class WeeklySignInManager extends Component {
     /** 計算今年第幾週 */
     getCurrentWeekIndex(): number {
         const now = new Date();
-        const firstDay = new Date(now.getFullYear(), 0, 1);
-        const days = Math.floor((now.getTime() - firstDay.getTime()) / (1000 * 60 * 60 * 24));
-        return Math.floor(days / 7);
+        const firstThursday = new Date(now.getFullYear(), 0, 1);
+
+        // 找到第一個週四（ISO 週從包含週四的週一開始）
+        while (firstThursday.getDay() !== 4) {
+            firstThursday.setDate(firstThursday.getDate() + 1);
+        }
+
+        const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+        return Math.floor((now.getTime() - firstThursday.getTime()) / msPerWeek) + 1;
     }
 
     /** 儲存玩家資料 */
@@ -116,8 +118,6 @@ export class WeeklySignInManager extends Component {
         for (let i = 0; i < this.dayBgSprites.length; i++) {
             const sprite = this.dayBgSprites[i];
             const label = this.dayLabels[i];
-            const signedCount = this.playerData.signInData.monthly.signedDaysCount;
-            this.monthlyCountLabel.string = `本月累計簽到第 ${signedCount} 天`;
 
             let status: DayStatus;
 
@@ -250,17 +250,5 @@ export class WeeklySignInManager extends Component {
         this.updateSignInUI();
 
         this.claimButton.interactable = false;
-        this.signInHintLabel.string = "今日已簽到";
-    }
-
-    
-    /** 顯示簽到面板 */
-    showPanel() {
-        this.node.active = true;
-    }
-
-    /** 隱藏簽到面板 */
-    hidePanel() {
-        this.node.active = false;
     }
 }

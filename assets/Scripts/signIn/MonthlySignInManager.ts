@@ -1,6 +1,6 @@
 import { _decorator, Component, Node, Label, Button, Prefab, SpriteFrame, instantiate, UITransform } from 'cc';
-import { DataManager } from './DataManager';
-import { RewardPopup } from './RewardPopup';
+import { DataManager } from '../DataManager';
+import { RewardPopup } from '../RewardPopup';
 import { tween, Vec3 } from 'cc';
 
 const { ccclass, property } = _decorator;
@@ -30,7 +30,7 @@ export class MonthlySignInManager extends Component {
     defaultIcon: SpriteFrame = null!;
 
     @property(Node)
-    flyingStampNode: Node = null!; // 大印章動畫節點（全畫面專用）
+    flyingStampNode: Node = null!; 
 
 
     private dayLabels: Label[] = [];
