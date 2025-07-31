@@ -11,7 +11,11 @@ export class GameManager extends Component {
     fishArea: Node = null!;  // 魚可以活動的區域
 
     @property([Prefab])
-    fishPrefabsByStage: Prefab[] = [];  // 1~6 階魚 Prefab
+    maleFishPrefabsByStage: Prefab[] = [];  // 公魚：第1~6階
+
+    @property([Prefab])
+    femaleFishPrefabsByStage: Prefab[] = [];  // 母魚：第1~6階
+
 
     /** 處理魚的狀態更新 */
     async processDailyUpdate() {
@@ -90,10 +94,16 @@ export class GameManager extends Component {
         const margin = 50;
 
         for (const fish of fishList) {
-            // 根據階段取得對應 prefab
-            const prefab = this.fishPrefabsByStage[fish.stage - 1];
+            let prefab: Prefab | null = null;
+
+            if (fish.gender === "female") {
+                prefab = this.femaleFishPrefabsByStage[fish.stage - 1];
+            } else {
+                prefab = this.maleFishPrefabsByStage[fish.stage - 1];
+            }
+
             if (!prefab) {
-                console.warn(`找不到階段 ${fish.stage} 對應的魚 prefab`);
+                console.warn(`找不到 ${fish.gender} 的階段 ${fish.stage} 魚 prefab`);
                 continue;
             }
 
@@ -105,19 +115,18 @@ export class GameManager extends Component {
 
             fishNode.name = `Fish_${fish.id}`;
             
-            // 隨機位置
             const randX = Math.random() * (width - margin * 2) - (width / 2 - margin);
             const randY = Math.random() * (height - margin * 2) - (height / 2 - margin);
             fishNode.setPosition(randX, randY, 0);
 
-            // 隨機方向
             const initialDirection = Math.random() > 0.5 ? 1 : -1;
             fishNode.setScale(new Vec3(initialDirection, 1, 1));
             fishNode["initialDirection"] = initialDirection;
 
             this.fishArea.addChild(fishNode);
-            console.log(`生成魚 ${fish.name}（階段 ${fish.stage}）於 (${randX}, ${randY})`);
+            console.log(`生成${fish.gender === 'female' ? '母魚' : '公魚'} ${fish.name}（階段 ${fish.stage}）於 (${randX}, ${randY})`);
         }
+
     }
 
     /** 遊戲開始時執行的初始化流程 */

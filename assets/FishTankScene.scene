@@ -119,7 +119,7 @@
     "fishArea": {
       "__id__": 4
     },
-    "fishPrefabsByStage": [
+    "maleFishPrefabsByStage": [
       {
         "__uuid__": "3c8d7b98-16f3-4f3c-b91e-c33ee77be62c",
         "__expectedType__": "cc.Prefab"
@@ -142,6 +142,32 @@
       },
       {
         "__uuid__": "2eb4cbd1-a031-464a-8bc1-e082eae995e0",
+        "__expectedType__": "cc.Prefab"
+      }
+    ],
+    "femaleFishPrefabsByStage": [
+      {
+        "__uuid__": "c19066d8-d4ae-4df8-845d-2048a7ab7aee",
+        "__expectedType__": "cc.Prefab"
+      },
+      {
+        "__uuid__": "dcde08c4-83f2-4628-8654-9b52dc3fc7b7",
+        "__expectedType__": "cc.Prefab"
+      },
+      {
+        "__uuid__": "5b9dc720-2843-4e37-a567-ef154a6f71df",
+        "__expectedType__": "cc.Prefab"
+      },
+      {
+        "__uuid__": "e6d02468-43f3-4f53-96d8-bacbe0e6f5b4",
+        "__expectedType__": "cc.Prefab"
+      },
+      {
+        "__uuid__": "85fe42c5-b1d5-4ee3-81f9-d21f8ab5f3c7",
+        "__expectedType__": "cc.Prefab"
+      },
+      {
+        "__uuid__": "4b8d7d81-f118-45b0-91f2-bfe6395472cc",
         "__expectedType__": "cc.Prefab"
       }
     ],
@@ -169,7 +195,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 0,
+      "y": -54.639999999999986,
       "z": 0
     },
     "_lrot": {
@@ -29508,7 +29534,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 980,
-      "height": 980
+      "height": 870.72
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -29531,7 +29557,7 @@
     "_target": null,
     "_left": -130,
     "_right": -130,
-    "_top": 150,
+    "_top": 259.28,
     "_bottom": 150,
     "_horizontalCenter": 0,
     "_verticalCenter": 0,

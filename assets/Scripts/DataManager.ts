@@ -132,7 +132,7 @@ export class DataManager {
                 id: i,
                 name: `鱘龍${i}號`,
                 gender: i % 2 === 0 ? "female" : "male",
-                stage: 5,
+                stage: 3,
                 growthDaysRequired: 10,
                 growthDaysPassed: 0,
                 lastFedDate: new Date().toISOString(),
