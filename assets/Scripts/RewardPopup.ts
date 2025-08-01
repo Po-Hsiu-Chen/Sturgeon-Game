@@ -51,9 +51,6 @@ export class RewardPopup extends Component {
 
         tween(this.node)
             .to(0.6, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' })
-            .call(() => {
-                console.log('動畫完成: scale =', this.node.scale);
-            })
             .start();
     }
 

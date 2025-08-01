@@ -8,30 +8,21 @@ const { ccclass, property } = _decorator;
 @ccclass('MonthlySignInManager')
 export class MonthlySignInManager extends Component {
 
-    @property(Node)
-    daysGrid: Node = null!;  // DaysGrid 節點
+    // UI References
+    @property(Node) daysGrid: Node = null!;
+    @property(Label) monthlyCountLabel: Label = null!;
+    @property(Button) claimButton: Button = null!;
+    @property(Label) signInHintLabel: Label = null!;
+    @property(Prefab) rewardPopupPrefab: Prefab = null!;
+    @property(Node) flyingStampNode: Node = null!;
 
-    @property(Label)
-    monthlyCountLabel: Label = null!;
-
-    @property(Button)
-    claimButton: Button = null!;
-
-    @property(Label)
-    signInHintLabel: Label = null!;
-
-    @property(Prefab)
-    rewardPopupPrefab: Prefab = null!;
-
-    @property(SpriteFrame)
-    dragonBoneIconSpriteFrame: SpriteFrame = null!;
-
-    @property(SpriteFrame)
-    defaultIcon: SpriteFrame = null!;
-
-    @property(Node)
-    flyingStampNode: Node = null!; 
-
+    // SpriteFrames
+    @property(SpriteFrame) normalFeedSpriteFrame: SpriteFrame = null!;
+    @property(SpriteFrame) premiumFeedSpriteFrame: SpriteFrame = null!;
+    @property(SpriteFrame) fanSpriteFrame: SpriteFrame = null!;
+    @property(SpriteFrame) heaterSpriteFrame: SpriteFrame = null!;
+    @property(SpriteFrame) brushSpriteFrame: SpriteFrame = null!;
+    @property(SpriteFrame) defaultSpriteFrame: SpriteFrame = null!;
 
     private dayLabels: Label[] = [];
     private dayStampNodes: Node[] = [];
@@ -61,9 +52,12 @@ export class MonthlySignInManager extends Component {
         this.updateSignInUI();
 
         const todaySigned = monthly.lastSignDate === todayString;
+        const fullySigned = monthly.signedDaysCount >= this.dayStampNodes.length;
 
-        this.claimButton.interactable = !todaySigned;
-        this.signInHintLabel.string = todaySigned ? "今日已簽到" : "點擊簽到";
+        this.claimButton.interactable = !todaySigned && !fullySigned;
+        this.signInHintLabel.string = fullySigned
+            ? "本月已完成簽到"
+            : (todaySigned ? "今日已簽到" : "點擊簽到");
 
         this.claimButton.node.on('click', this.onClaimButtonClick, this);
     }
@@ -90,7 +84,6 @@ export class MonthlySignInManager extends Component {
     updateSignInUI() {
         const monthly = this.playerData.signInData.monthly;
         this.monthlyCountLabel.string = `本月累計簽到第 ${monthly.signedDaysCount} 天`;
-
         for (let i = 0; i < this.dayLabels.length; i++) {
             const label = this.dayLabels[i];
             const stamp = this.dayStampNodes[i];
@@ -106,33 +99,85 @@ export class MonthlySignInManager extends Component {
 
     }
 
+    addInventoryItem(key: string, count: number) {
+        const inv = this.playerData.inventory;
+
+        // 飼料類（feeds）
+        if (key === 'normalFeed') {
+            inv.feeds.normal += count;
+        } else if (key === 'premiumFeed') {
+            inv.feeds.premium += count;
+
+        // 道具類（items）
+        } else if (key in inv.items) {
+            inv.items[key] += count;
+
+        } else {
+            console.warn(`未知的物品 key: ${key}`);
+        }
+    }
+
     async onClaimButtonClick() {
         const now = new Date();
         const todayString = now.toISOString().split('T')[0];
         const monthly = this.playerData.signInData.monthly;
 
-        if (monthly.lastSignDate === todayString || monthly.signedDaysCount >= 31) {
+        if (
+            monthly.lastSignDate === todayString ||
+            monthly.signedDaysCount >= this.dayStampNodes.length
+        ) {
             return;
         }
 
         // 取得今天要簽到的格子 index
         const targetIndex = monthly.signedDaysCount;
+
+        if (targetIndex >= this.dayStampNodes.length) {
+            console.warn("簽到格子數量不足");
+            return;
+        }
+
         const targetStamp = this.dayStampNodes[targetIndex];
+
 
         // 更新資料
         monthly.signedDaysCount++;
         monthly.lastSignDate = todayString;
 
-        const rewardAmount = 10;
-        this.playerData.dragonBones += rewardAmount;
+        const day = now.getDay(); // 0 = Sunday, 6 = Saturday
+        const rewards = [];
 
-        const rewards = [
-            {
-                icon: this.getIconSpriteFrame('dragonbone'),
-                name: '龍骨',
-                count: rewardAmount
-            }
-        ];
+        if (day === 0 || day === 6) {
+            // 周末隨機獎勵
+            const weekendItems = [
+                { key: 'premiumFeed', name: '高級飼料', count: 1 },
+                { key: 'fan', name: '風扇', count: 1 },
+                { key: 'heater', name: '加熱器', count: 1 },
+                { key: 'brush', name: '魚缸刷', count: 1 }
+            ];
+            const reward = weekendItems[Math.floor(Math.random() * weekendItems.length)];
+
+            this.addInventoryItem(reward.key, reward.count);
+
+            rewards.push({
+                icon: this.getIconSpriteFrame(reward.key),
+                name: reward.name,
+                count: reward.count
+            });
+
+        } else {
+            // 平日給普通飼料
+            this.addInventoryItem('normalFeed', 1);
+
+            rewards.push({
+                icon: this.getIconSpriteFrame('normalFeed'),
+                name: '普通飼料',
+                count: 1
+            });
+        }
+        rewards.forEach(r => {
+            console.log(`月簽到獎勵：${r.name} x${r.count}`);
+        });
 
         await this.savePlayerData();
 
@@ -185,10 +230,12 @@ export class MonthlySignInManager extends Component {
 
     getIconSpriteFrame(key: string): SpriteFrame {
         switch (key) {
-            case 'dragonbone':
-                return this.dragonBoneIconSpriteFrame;
-            default:
-                return this.defaultIcon;
+            case 'normalFeed': return this.normalFeedSpriteFrame;
+            case 'premiumFeed': return this.premiumFeedSpriteFrame;
+            case 'fan': return this.fanSpriteFrame;
+            case 'heater': return this.heaterSpriteFrame;
+            case 'brush': return this.brushSpriteFrame;
+            default: return this.defaultSpriteFrame;
         }
     }
 

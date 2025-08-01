@@ -15,33 +15,22 @@ enum DayStatus {
 @ccclass('WeeklySignInManager')
 export class WeeklySignInManager extends Component {
 
-    @property(Sprite)
-    dayBgSprites: Sprite[] = [];
+    // 簽到格子
+    @property(Sprite) dayBgSprites: Sprite[] = [];
+    @property(Label) dayLabels: Label[] = [];
 
-    @property(Label)
-    dayLabels: Label[] = [];
+    // UI References
+    @property(Button) claimButton: Button = null!;
+    @property(Label) signInHintLabel: Label = null!;
 
-    @property(Button)
-    claimButton: Button = null!;
+    // 彈出獎勵 Prefab
+    @property(Prefab) rewardPopupPrefab: Prefab = null!;
+    @property(Prefab) quizPanelPrefab: Prefab = null!;
 
-    @property(Prefab)
-    rewardPopupPrefab: Prefab = null!;  
-
-    @property(SpriteFrame)
-    dragonBoneIconSpriteFrame: SpriteFrame = null!;
-
-    @property(SpriteFrame)
-    premiumFeedIconSpriteFrame: SpriteFrame = null!;
-
-    @property(SpriteFrame)
-    defaultIcon: SpriteFrame = null!;
-
-    @property(Label)
-    signInHintLabel: Label = null!;
-
-    @property(Prefab)
-    quizPanelPrefab: Prefab = null!;
-
+    // SpriteFrames
+    @property(SpriteFrame) dragonBoneSpriteFrame: SpriteFrame = null!;
+    @property(SpriteFrame) premiumFeedSpriteFrame: SpriteFrame = null!;
+    @property(SpriteFrame) defaultSpriteFrame: SpriteFrame = null!;
 
     private todayIndex: number = 0;
     private playerData: any;
@@ -81,7 +70,7 @@ export class WeeklySignInManager extends Component {
 
         console.log("本週週數 =", currentWeek);
         console.log("玩家資料週數 =", storedWeek);
-        
+
         if (currentWeek !== storedWeek) {
             console.log('新的一週開始，重置週簽到資料');
             this.playerData.signInData.weekly = {
@@ -162,11 +151,11 @@ export class WeeklySignInManager extends Component {
         // 你可以自己用 SpriteAtlas 或一張張圖做對應
         switch (key) {
             case 'dragonbone':
-                return this.dragonBoneIconSpriteFrame;
+                return this.dragonBoneSpriteFrame;
             case 'premium_feed':
-                return this.premiumFeedIconSpriteFrame;
+                return this.premiumFeedSpriteFrame;
             default:
-                return this.defaultIcon;
+                return this.defaultSpriteFrame;
         }
     }
 
