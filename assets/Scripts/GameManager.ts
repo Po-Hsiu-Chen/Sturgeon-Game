@@ -1,7 +1,6 @@
 import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, ProgressBar, UITransform, Vec3 } from 'cc';
 import { SwimmingFish } from './SwimmingFish';
 import { DataManager } from './DataManager';
-
 const { ccclass, property } = _decorator;
 
 @ccclass('GameManager')
@@ -16,12 +15,17 @@ export class GameManager extends Component {
     @property([Prefab])
     femaleFishPrefabsByStage: Prefab[] = [];  // 母魚：第1~6階
 
+    /** 初始化 */
+    async start() {
+        await DataManager.ensureInitialized(); // 初始化資料
+        await this.processDailyUpdate();       // 更新魚的狀態
+        await this.spawnAllFish();             // 產生魚
+    }
 
-    /** 處理魚的狀態更新 */
+    /** 處理魚飢餓與成長 */
     async processDailyUpdate() {
         const playerData = await DataManager.getPlayerData();
         const now = new Date();
-
         const today = now.toISOString().split('T')[0];  // 只取日期部分
         const lastLoginDate = playerData.lastLoginDate || today;
         const lastLoginTime = new Date(playerData.lastLoginTime || now);  // 時間部分
@@ -55,18 +59,16 @@ export class GameManager extends Component {
                 continue;
             }
 
-            // 成長處理（只根據 calendar days）
+            // 成長處理(以整天計)
             if (daysPassed > 0) {
                 fish.growthDaysPassed += daysPassed;
 
                 if (fish.growthDaysPassed >= fish.growthDaysRequired && fish.stage < 6) {
                     fish.stage++;
                     fish.growthDaysPassed = 0;
-
                     if (fish.stage < 6) {
                         fish.growthDaysRequired = stageRequirements[fish.stage];
                     }
-
                     console.log(`${fish.name} 升級到第 ${fish.stage} 階！`);
                 }
             }
@@ -87,7 +89,6 @@ export class GameManager extends Component {
     async spawnAllFish() {
         const playerData = await DataManager.getPlayerData();
         const fishList = playerData.fishList;
-
         const fishAreaTransform = this.fishArea.getComponent(UITransform);
         const width = fishAreaTransform.width;
         const height = fishAreaTransform.height;
@@ -113,30 +114,60 @@ export class GameManager extends Component {
                 swimmingFish.setFishData(fish);
             }
 
-            fishNode.name = `Fish_${fish.id}`;
-            
+            // 隨機位置與方向
             const randX = Math.random() * (width - margin * 2) - (width / 2 - margin);
             const randY = Math.random() * (height - margin * 2) - (height / 2 - margin);
-            fishNode.setPosition(randX, randY, 0);
-
             const initialDirection = Math.random() > 0.5 ? 1 : -1;
+
+            fishNode.name = `Fish_${fish.id}`;
+            fishNode.setPosition(randX, randY, 0);
             fishNode.setScale(new Vec3(initialDirection, 1, 1));
             fishNode["initialDirection"] = initialDirection;
 
             this.fishArea.addChild(fishNode);
             console.log(`生成${fish.gender === 'female' ? '母魚' : '公魚'} ${fish.name}（階段 ${fish.stage}）於 (${randX}, ${randY})`);
         }
-
     }
 
-    /** 遊戲開始時執行的初始化流程 */
-    async start() {
-        await DataManager.ensureInitialized();
-        await this.processDailyUpdate();
-        await this.spawnAllFish();
+    /** 替換Prefab(變性用) */
+    replaceFishNode(fishData: any): Node {
+        // 找出原本節點
+        const oldFishNode = this.fishArea.getChildByName(`Fish_${fishData.id}`);
+        if (!oldFishNode) {
+            console.warn(`找不到原魚節點 Fish_${fishData.id}`);
+            return null!;
+        }
+        const oldPos = oldFishNode.getPosition();
+        const direction = oldFishNode['initialDirection'] ?? 1;
+        oldFishNode.destroy();
+
+        // 根據性別與階段取得 prefab
+        const stageIndex = fishData.stage - 1;
+        const isMale = fishData.gender === 'male';
+        const prefab = isMale
+            ? this.maleFishPrefabsByStage[stageIndex]
+            : this.femaleFishPrefabsByStage[stageIndex];
+
+        if (!prefab) {
+            console.warn(`找不到對應魚 prefab：stage=${fishData.stage}, gender=${fishData.gender}`);
+            return null!;
+        }
+
+        const newFishNode = instantiate(prefab);
+        newFishNode.name = `Fish_${fishData.id}`;
+        newFishNode.setPosition(oldPos);
+        newFishNode['initialDirection'] = direction;
+        newFishNode.setScale(new Vec3(direction, 1, 1));
+
+        this.fishArea.addChild(newFishNode);
+
+        const swimmingFish = newFishNode.getComponent(SwimmingFish);
+        if (swimmingFish) {
+            swimmingFish.setFishData(fishData);
+            swimmingFish.onClickFish?.(); // 讓這隻魚自動成為目前選中的魚
+        }
+
+        return newFishNode;
     }
 
-    update(deltaTime: number) {
-        
-    }
 }

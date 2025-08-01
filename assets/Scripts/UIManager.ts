@@ -1,5 +1,8 @@
 import { _decorator, Component, Node, Label, Sprite, SpriteFrame, EditBox, Vec3, tween } from 'cc';
 import { SwimmingFish } from './SwimmingFish';
+import { FishLogic } from './FishLogic';
+import { GameManager } from './GameManager';
+import { DataManager } from './DataManager';
 const { ccclass, property } = _decorator;
 
 @ccclass('UIManager')
@@ -7,73 +10,68 @@ export class UIManager extends Component {
     @property(Node)
     fishDetailPanel: Node = null!;
 
-    // Title
-    @property(Label)
-    fishNameLabel: Label = null!;
+    // Title and InfoSection
+    @property(Label) fishNameLabel: Label = null!;
+    @property(Label) genderLabel: Label = null!;
+    @property(Label) daysLabel: Label = null!;
+    @property(Label) stageLabel: Label = null!;
+    @property(Label) hungerLabel: Label = null!;
+    @property(Sprite) fishStatusImage: Sprite = null!;
 
-    // InfoSection
-    @property(Label)
-    genderLabel: Label = null!;
-    @property(Label)
-    daysLabel: Label = null!;
-    @property(Label)
-    stageLabel: Label = null!;
-    @property(Label)
-    hungerLabel: Label = null!;
-    @property(Sprite)
-    fishStatusImage: Sprite = null!;
+    // 飼料相關
+    @property(Node) feedBtnNormal: Node = null!;
+    @property(Node) feedBtnPremium: Node = null!;
+    @property(Label) feedNormalCountLabel: Label = null!;
+    @property(Label) feedPremiumCountLabel: Label = null!;
 
-    // 飼料按鈕
-    @property(Node)
-    feedBtnNormal: Node = null!;
-    @property(Node)
-    feedBtnPremium: Node = null!;
-
-    // 飼料剩餘數量
-    @property(Label)
-    feedNormalCountLabel: Label = null!;
-    @property(Label)
-    feedPremiumCountLabel: Label = null!;
+    // 道具相關
+    @property(Node) genderPotionBtn: Node = null!;
+    @property(Node) upgradePotionBtn: Node = null!;
+    @property(Label) genderPotionCountLabel: Label = null!;
+    @property(Label) upgradePotionCountLabel: Label = null!;
 
     // 關閉按鈕
-    @property(Node)
-    closeButton: Node = null!;
+    @property(Node) closeButton: Node = null!;
 
-    // 情緒圖 (暫時先放兩個)
-    @property(SpriteFrame)
-    happySprite: SpriteFrame = null!;
-    @property(SpriteFrame)
-    sadSprite: SpriteFrame = null!;
+    // 情緒圖片 (暫時先放兩個)
+    @property(SpriteFrame) happySprite: SpriteFrame = null!;
+    @property(SpriteFrame) sadSprite: SpriteFrame = null!;
 
     // 改名字相關
-    @property(Node)
-    RenamePanel: Node = null!;
-    @property(EditBox)
-    renameInput: EditBox = null!;
-    @property(Node)
-    renameConfirmButton: Node = null!;
-    @property(Node)
-    renameCancelButton: Node = null!;
-    @property(Node)
-    renameButton: Node = null!; // 玩家點這個來開啟 RenamePanel
+    @property(Node) RenamePanel: Node = null!;
+    @property(EditBox) renameInput: EditBox = null!;
+    @property(Node) renameConfirmButton: Node = null!;
+    @property(Node) renameCancelButton: Node = null!;
+    @property(Node) renameButton: Node = null!;
 
     // Tab 切換
-    @property(Node)
-    fashionTabButton: Node = null!;
-    @property(Node)
-    healTabButton: Node = null!;
-    @property(Node)
-    feedTabButton: Node = null!;
-    @property(Node)
-    fashionSection: Node = null!;
-    @property(Node)
-    healSection: Node = null!;
-    @property(Node)
-    feedSection: Node = null!;
+    @property(Node) fashionTabButton: Node = null!;
+    @property(Node) healTabButton: Node = null!;
+    @property(Node) feedTabButton: Node = null!;
+    @property(Node) fashionSection: Node = null!;
+    @property(Node) healSection: Node = null!;
+    @property(Node) feedSection: Node = null!;
 
     private currentFishId: number = -1;
 
-    showFishDetail(fish: any) {
+    /** 初始化 */
+    start() {
+        this.closeButton.on(Node.EventType.TOUCH_END, this.closeFishDetail, this);
+
+        this.renameButton.on(Node.EventType.TOUCH_END, this.showRenamePanel, this);
+        this.renameConfirmButton.on(Node.EventType.TOUCH_END, this.renameFish, this);
+        this.renameCancelButton.on(Node.EventType.TOUCH_END, this.hideRenamePanel, this);
+
+        this.fashionTabButton.on(Node.EventType.TOUCH_END, () => this.switchTab('fashion'), this);
+        this.healTabButton.on(Node.EventType.TOUCH_END, () => this.switchTab('heal'), this);
+        this.feedTabButton.on(Node.EventType.TOUCH_END, () => this.switchTab('feed'), this);
+
+        this.genderPotionBtn.on(Node.EventType.TOUCH_END, this.onUseGenderPotion, this);
+        this.upgradePotionBtn.on(Node.EventType.TOUCH_END, this.onUseUpgradePotion, this);
+    }
+
+    /** 顯示魚詳細資訊 */
+    async showFishDetail(fish: any) {
         const wasInactive = !this.fishDetailPanel.active;
 
         if (wasInactive) {
@@ -94,11 +92,13 @@ export class UIManager extends Component {
         this.daysLabel.string = `已成長天數：${fish.growthDaysPassed}`;
         this.stageLabel.string = `LV ${fish.stage}`;
         this.hungerLabel.string = `飢餓值：${Math.floor(fish.hunger)} / 100`;
-
-        const playerData = JSON.parse(localStorage.getItem("playerData"));
-
+        
+        // 剩餘數量顯示
+        const playerData = await DataManager.getPlayerData();
         this.feedNormalCountLabel.string = playerData.inventory.feeds.normal.toString();
         this.feedPremiumCountLabel.string = playerData.inventory.feeds.premium.toString();
+        this.genderPotionCountLabel.string = playerData.inventory.items.genderPotion.toString();
+        this.upgradePotionCountLabel.string = playerData.inventory.items.upgradePotion.toString();
 
         // 綁定按鈕事件
         this.feedBtnNormal.off(Node.EventType.TOUCH_END);
@@ -119,80 +119,55 @@ export class UIManager extends Component {
         }
     }
 
+    /** 餵食 */
     feedNormal() {
         this.feedFish(3, 'normal');
     }
-
     feedPremium() {
         this.feedFish(20, 'premium');
     }
-
-    feedFish(amount: number, type: 'normal' | 'premium') {
-        const playerData = JSON.parse(localStorage.getItem('playerData'));
+    async feedFish(amount: number, type: 'normal' | 'premium') {
+        const playerData = await DataManager.getPlayerData();
         const fish = playerData.fishList.find(f => f.id === this.currentFishId);
         if (!fish) return;
 
-        if (playerData.inventory.feeds[type] <= 0) {
-            console.warn("沒有飼料！");
-            return;
-        }
-
-        playerData.inventory.feeds[type]--;
-        fish.hunger = Math.max(0, fish.hunger - amount);
-        fish.lastFedDate = new Date().toISOString();
-        fish.emotion = "happy";
-
-        localStorage.setItem("playerData", JSON.stringify(playerData));
-        this.showFishDetail(fish); 
+        const msg = FishLogic.feed(fish, playerData.inventory, amount, type);
+        console.log(msg);
+        await DataManager.savePlayerData(playerData);
+        this.showFishDetail(fish);
     }
 
-    hideAllSubPanels() {
-        this.RenamePanel.active = false;
-        // 之後所有需要關起來的 panel
-    }
-    
-    closeFishDetail() {
-        this.fishDetailPanel.active = false;
-        this.hideAllSubPanels(); 
-        SwimmingFish.clearSelection();
-    }
-
-    showRenamePanel() {
-        const playerData = JSON.parse(localStorage.getItem('playerData'));
-        const fish = playerData.fishList.find(f => f.id === this.currentFishId);
-        if (!fish) return;
-
-        this.renameInput.string = fish.name;
-        this.RenamePanel.active = true;
-    }
-
-    hideRenamePanel() {
-        this.RenamePanel.active = false;
-    }
-
-    renameFish() {
+    /** 重新命名 */
+    async renameFish() {
         const newName = this.renameInput.string.trim();
         if (!newName) {
             console.warn("名字不能為空！");
             return;
         }
 
-        const playerData = JSON.parse(localStorage.getItem('playerData'));
+        const playerData = await DataManager.getPlayerData();
         const fish = playerData.fishList.find(f => f.id === this.currentFishId);
         if (!fish) return;
 
-        fish.name = newName;
-        localStorage.setItem('playerData', JSON.stringify(playerData));
+        const renamed = FishLogic.renameFish(fish, newName);
+        if (!renamed) {
+            console.warn("名字無效");
+            return;
+        }
 
+        await DataManager.savePlayerData(playerData);
         this.hideRenamePanel();
-        this.showFishDetail(fish); // 更新畫面
+        this.showFishDetail(fish);
     }
 
+    /** Tab 切換 */
     switchTab(tabName: 'fashion' | 'heal' | 'feed') {
+        // 重置所有 tab 的順序
         this.fashionSection.setSiblingIndex(0);
         this.healSection.setSiblingIndex(0);
         this.feedSection.setSiblingIndex(0);
 
+        // 把選中的排最上面
         switch (tabName) {
             case 'fashion':
                 this.fashionSection.setSiblingIndex(99);
@@ -207,17 +182,64 @@ export class UIManager extends Component {
 
     }
 
-    start() {
-        this.closeButton.on(Node.EventType.TOUCH_END, this.closeFishDetail, this);
+    /** 道具使用：變性 */
+    async onUseGenderPotion() {
+        const playerData = await DataManager.getPlayerData();
+        const fish = playerData.fishList.find(f => f.id === this.currentFishId);
+        if (!fish) return;
 
-        this.renameButton.on(Node.EventType.TOUCH_END, this.showRenamePanel, this);
-        this.renameConfirmButton.on(Node.EventType.TOUCH_END, this.renameFish, this);
-        this.renameCancelButton.on(Node.EventType.TOUCH_END, this.hideRenamePanel, this);
+        const msg = FishLogic.useGenderPotion(fish, playerData.inventory.items);
+        await DataManager.savePlayerData(playerData);
+        console.log(msg);
+        this.showFishDetail(fish); // 更新畫面
 
-        this.fashionTabButton.on(Node.EventType.TOUCH_END, () => this.switchTab('fashion'), this);
-        this.healTabButton.on(Node.EventType.TOUCH_END, () => this.switchTab('heal'), this);
-        this.feedTabButton.on(Node.EventType.TOUCH_END, () => this.switchTab('feed'), this);
-
+        const gameManager = this.node.scene.getComponentInChildren(GameManager); 
+        if (gameManager) {
+            gameManager.replaceFishNode(fish);  // 根據新性別產生對應 prefab
+        }
     }
 
+    /** 道具使用：升級 */
+    async onUseUpgradePotion() {
+        const playerData = await DataManager.getPlayerData();
+        const fish = playerData.fishList.find(f => f.id === this.currentFishId);
+        if (!fish) return;
+
+        const { message, upgraded } = FishLogic.useUpgradePotion(fish, playerData.inventory.items);
+        await DataManager.savePlayerData(playerData);
+        console.log(message);
+
+        await this.showFishDetail(fish); // 更新資訊
+
+        if (upgraded) {
+            const gameManager = this.node.scene.getComponentInChildren(GameManager); 
+            if (gameManager) {
+                gameManager.replaceFishNode(fish);  // 替換模型
+            }
+        }
+    }
+ 
+    hideAllSubPanels() {
+        this.RenamePanel.active = false;
+        // 之後所有需要關起來的 panel
+    }
+    
+    closeFishDetail() {
+        this.fishDetailPanel.active = false;
+        this.hideAllSubPanels(); 
+        SwimmingFish.clearSelection();
+    }
+
+    async showRenamePanel() {
+        const playerData = await DataManager.getPlayerData();
+        const fish = playerData.fishList.find(f => f.id === this.currentFishId);
+        if (!fish) return;
+
+        this.renameInput.string = fish.name;
+        this.RenamePanel.active = true;
+    }
+
+    hideRenamePanel() {
+        this.RenamePanel.active = false;
+    }
 }

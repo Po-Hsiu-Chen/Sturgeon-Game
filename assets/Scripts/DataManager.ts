@@ -64,6 +64,8 @@ export interface PlayerData {
         items: {
             coldMedicine: number;  // 感冒藥
             revivePotion: number;  // 復活藥
+            genderPotion: number;  // 變性藥
+            upgradePotion: number; // 升級藥
             heater: number;        // 加熱器
             fan: number;           // 電風扇
             cleaner: number;       // 淨水劑
@@ -166,6 +168,8 @@ export class DataManager {
                 items: {
                     coldMedicine: 1,
                     revivePotion: 1,
+                    genderPotion: 10,
+                    upgradePotion: 10,
                     heater: 1,
                     fan: 1,
                     cleaner: 2

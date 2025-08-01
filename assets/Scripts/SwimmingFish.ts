@@ -1,6 +1,6 @@
 import { _decorator, Component, Vec3, Node, find, UITransform, Sprite, SpriteFrame, Prefab, tween } from 'cc';
 import { UIManager } from './UIManager';
-import type { FishData } from './DataManager';
+import { DataManager, type FishData } from './DataManager';
 
 const { ccclass, property } = _decorator;
 
@@ -95,13 +95,16 @@ export class SwimmingFish extends Component {
 
     static clearSelection() {
         if (SwimmingFish.currentSelectedFish) {
-            SwimmingFish.currentSelectedFish.emotionBubble!.active = false;
+            const bubble = SwimmingFish.currentSelectedFish.emotionBubble;
+            if (bubble && bubble.isValid) {
+                bubble.active = false;
+            }
             SwimmingFish.currentSelectedFish = null;
         }
     }
-    
-    onClickMagnifier() {
-        const playerData = JSON.parse(localStorage.getItem('playerData'));
+
+    async onClickMagnifier() {
+        const playerData = await DataManager.getPlayerData();
         const fishId = parseInt(this.node.name.split('_')[1]);
         const fishData = playerData.fishList.find(f => f.id === fishId);
 
