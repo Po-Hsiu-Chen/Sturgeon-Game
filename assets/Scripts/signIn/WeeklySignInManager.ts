@@ -2,7 +2,7 @@ import { _decorator, Component, Node, Sprite, Color, Label, Button, sys, Prefab,
 import { DataManager } from '../DataManager';
 import { RewardPopup } from '../RewardPopup';
 import { QuizPanel } from '../quiz/QuizPanel';
-import { getRandomItem, shuffleArray } from '../utils/utils';
+import { getRandomItem, getCurrentWeekIndex, shuffleArray } from '../utils/utils';
 const { ccclass, property } = _decorator;
 
 enum DayStatus {
@@ -65,7 +65,7 @@ export class WeeklySignInManager extends Component {
 
     /** 判斷當週是否要重置簽到狀態 */
     handleWeekReset() {
-        const currentWeek = this.getCurrentWeekIndex();
+        const currentWeek = getCurrentWeekIndex();
         const storedWeek = this.playerData.signInData.weekly.weekIndex;
 
         console.log("本週週數 =", currentWeek);
@@ -81,20 +81,6 @@ export class WeeklySignInManager extends Component {
             };
             this.savePlayerData();
         }
-    }
-
-    /** 計算今年第幾週 */
-    getCurrentWeekIndex(): number {
-        const now = new Date();
-        const firstThursday = new Date(now.getFullYear(), 0, 1);
-
-        // 找到第一個週四（ISO 週從包含週四的週一開始）
-        while (firstThursday.getDay() !== 4) {
-            firstThursday.setDate(firstThursday.getDate() + 1);
-        }
-
-        const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-        return Math.floor((now.getTime() - firstThursday.getTime()) / msPerWeek) + 1;
     }
 
     /** 儲存玩家資料 */

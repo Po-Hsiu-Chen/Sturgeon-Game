@@ -37,29 +37,14 @@ export class FishLogic {
         items.upgradePotion--;
         fish.growthDaysPassed += 5;
 
-        if (fish.growthDaysPassed >= fish.growthDaysRequired) {
-            fish.stage++;
-            fish.growthDaysPassed = 0;
+        const upgraded = this.tryStageUpgradeByGrowthDays(fish);
 
-            // 設定下一階段所需天數
-            const stageRequirements: Record<number, number> = {
-                1: 10,
-                2: 20,
-                3: 40,
-                4: 50,
-                5: 60,
-                6: 999,
-            };
-            if (fish.stage < 6) {
-                fish.growthDaysRequired = stageRequirements[fish.stage];
-            }
+        const message = upgraded
+            ? `${fish.name} 升級為第 ${fish.stage} 階！（吃藥長大）`
+            : `${fish.name} 成長天數 +5`;
 
-            return { message: `${fish.name} 升級為第 ${fish.stage} 階！`, upgraded: true };
-        }
-
-        return { message: `${fish.name} 成長進度提升了 +5 天！`, upgraded: false };
+        return { message, upgraded };
     }
-
 
     static useGenderPotion(fish: any, items: any): string {
         if (items.genderPotion <= 0) {
@@ -74,4 +59,26 @@ export class FishLogic {
         
         return `${fish.name} 的性別已變更為 ${fish.gender === 'male' ? '公' : '母'}`;
     }
+
+    static tryStageUpgradeByGrowthDays(fish: any): boolean {
+        const thresholds: Record<number, number> = {
+            1: 0,
+            2: 10,
+            3: 30,
+            4: 70,
+            5: 120,
+            6: 180,
+        };
+
+        let upgraded = false;
+
+        while (fish.stage < 6 && fish.growthDaysPassed >= thresholds[fish.stage + 1]) {
+            fish.stage++;
+            upgraded = true;
+        }
+
+        return upgraded;
+    }
+
 }
+

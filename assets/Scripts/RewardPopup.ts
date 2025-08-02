@@ -1,29 +1,17 @@
-import {
-    _decorator, Component, Node, SpriteFrame, Prefab, instantiate,
-    Label, Sprite, tween, Vec3, UIOpacity
-} from 'cc';
+import { _decorator, Component, Node, SpriteFrame, Prefab, instantiate, tween, Vec3, UIOpacity } from 'cc';
 import { RewardItem } from './RewardItem';
-
 const { ccclass, property } = _decorator;
 
 @ccclass('RewardPopup')
 export class RewardPopup extends Component {
-    @property(Node)
-    rewardGrid: Node = null!;
-
-    @property(Prefab)
-    rewardItemPrefab: Prefab = null!;
+    
+    @property(Node) rewardGrid: Node = null!;
+    @property(Prefab) rewardItemPrefab: Prefab = null!;
 
     // 效果光 - 三層
-    @property(Node)
-    effectLightBase: Node = null!;
-
-    @property(Node)
-    effectLightRotateCW: Node = null!;
-
-    @property(Node)
-    effectLightRotateCCW: Node = null!;
-
+    @property(Node) effectLightBase: Node = null!;
+    @property(Node) effectLightRotateCW: Node = null!;
+    @property(Node) effectLightRotateCCW: Node = null!;
 
     showRewards(rewards: { icon: SpriteFrame, name: string, count: number }[]) {
         this.rewardGrid.removeAllChildren();

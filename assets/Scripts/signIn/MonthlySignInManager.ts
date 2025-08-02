@@ -2,7 +2,7 @@ import { _decorator, Component, Node, Label, Button, Prefab, SpriteFrame, instan
 import { DataManager } from '../DataManager';
 import { RewardPopup } from '../RewardPopup';
 import { tween, Vec3 } from 'cc';
-
+import { getRandomItem } from '../utils/utils';
 const { ccclass, property } = _decorator;
 
 @ccclass('MonthlySignInManager')
@@ -155,8 +155,7 @@ export class MonthlySignInManager extends Component {
                 { key: 'heater', name: '加熱器', count: 1 },
                 { key: 'brush', name: '魚缸刷', count: 1 }
             ];
-            const reward = weekendItems[Math.floor(Math.random() * weekendItems.length)];
-
+            const reward = getRandomItem(weekendItems);
             this.addInventoryItem(reward.key, reward.count);
 
             rewards.push({

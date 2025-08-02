@@ -1,5 +1,6 @@
 import { _decorator, Component, Node, Label, Button, Sprite, Color, SpriteFrame } from 'cc';
 import { tween, Vec3 } from 'cc';
+import { shuffleArray } from '../utils/utils';
 const { ccclass, property } = _decorator;
 
 @ccclass('QuizPanel')
@@ -20,39 +21,46 @@ export class QuizPanel extends Component {
     private correctIndex: number = 0;
     private isCorrect: boolean = false;
 
-    /** 顯示題目，返回使用者是否答對 (固定4選項)*/
+    /** 顯示題目，返回使用者是否答對 (固定3選項)*/
     setup(questionData: { question: string, options: string[], answerIndex: number }): Promise<boolean> {
         this.questionLabel.string = questionData.question;
 
-        const options = this.shuffleArray([...questionData.options]);
+        const options = shuffleArray([...questionData.options.slice(0, 3)]); // 只取前3個
         this.correctIndex = options.indexOf(questionData.options[questionData.answerIndex]);
 
-        const prefix = ['A. ', 'B. ', 'C. ', 'D. '];
+        const prefix = ['A. ', 'B. ', 'C. '];
 
         for (let i = 0; i < this.optionButtons.length; i++) {
             const btn = this.optionButtons[i];
             const label = btn.getComponentInChildren(Label);
-            label.string = prefix[i] + options[i];
 
-            // 清除之前的事件
-            btn.node.off(Node.EventType.MOUSE_ENTER);
-            btn.node.off(Node.EventType.MOUSE_LEAVE);
-            btn.node.off('click');
+            if (i < 3) {
+                btn.node.active = true;
+                label.string = prefix[i] + options[i];
 
-            // 綁定 hover 效果
-            btn.node.on(Node.EventType.MOUSE_ENTER, () => {
-                if (btn.interactable) {
-                    btn.node.getComponent(Sprite)!.color = new Color(213, 239, 255); // Hover顏色
-                }
-            });
-            btn.node.on(Node.EventType.MOUSE_LEAVE, () => {
-                if (btn.interactable) {
-                    btn.node.getComponent(Sprite)!.color = new Color(226, 244, 255); // 還原顏色
-                }
-            });
+                btn.interactable = true;
+                btn.node.off(Node.EventType.MOUSE_ENTER);
+                btn.node.off(Node.EventType.MOUSE_LEAVE);
+                btn.node.off('click');
 
-            // 綁定點擊
-            btn.node.once('click', () => this.onSelect(i));
+                // hover 效果
+                btn.node.on(Node.EventType.MOUSE_ENTER, () => {
+                    if (btn.interactable) {
+                        btn.node.getComponent(Sprite)!.color = new Color(213, 239, 255);
+                    }
+                });
+                btn.node.on(Node.EventType.MOUSE_LEAVE, () => {
+                    if (btn.interactable) {
+                        btn.node.getComponent(Sprite)!.color = new Color(226, 244, 255);
+                    }
+                });
+
+                // 點擊事件
+                btn.node.once('click', () => this.onSelect(i));
+            } else {
+                // 第4個選項關閉或隱藏
+                btn.node.active = false;
+            }
         }
 
         return new Promise<boolean>((resolve) => {
@@ -60,10 +68,10 @@ export class QuizPanel extends Component {
         });
     }
 
+
     onSelect(index: number) {
         this.isCorrect = index === this.correctIndex;
         
-
         // 顯示紅綠色
         const btn = this.optionButtons[index];
         btn.node.getComponent(Sprite)!.color = this.isCorrect
@@ -108,14 +116,5 @@ export class QuizPanel extends Component {
             this.resolveAnswer(this.isCorrect); // 等動畫後才回傳
             this.node.destroy();                // 再關閉面板
         }, 2);
-    }
-
-
-    private shuffleArray<T>(array: T[]): T[] {
-        for (let i = array.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [array[i], array[j]] = [array[j], array[i]];
-        }
-        return array;
     }
 }

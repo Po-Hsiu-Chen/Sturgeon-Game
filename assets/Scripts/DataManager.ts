@@ -1,5 +1,6 @@
 import { _decorator, Component, Node } from 'cc';
 import { quizQuestions } from './quiz/QuizData';
+import { getCurrentWeekIndex } from './utils/utils';
 const { ccclass, property } = _decorator;
 
 // -------- 資料結構定義 --------
@@ -66,9 +67,10 @@ export interface PlayerData {
             revivePotion: number;  // 復活藥
             genderPotion: number;  // 變性藥
             upgradePotion: number; // 升級藥
+            changePotion: number;  // 整形藥
             heater: number;        // 加熱器
             fan: number;           // 電風扇
-            cleaner: number;       // 淨水劑
+            brush: number;         // 魚缸刷
         };
     };
     fashion: {
@@ -76,7 +78,7 @@ export interface PlayerData {
     };
     signInData: {
         weekly: {
-            weekIndex: number;              // 當前第幾週（用來重置）
+            weekIndex: number;             // 當前第幾週（用來重置）
             daysSigned: boolean[];         // 一週 7 天簽到紀錄
             questionsCorrect: boolean[];   // 是否答對紀錄
             lastSignDate: string;          // 最後簽到日期
@@ -84,7 +86,7 @@ export interface PlayerData {
         monthly: {
             month: number;                 // 月份（1~12）
             year: number;                  // 年（跨年重置）
-            signedDaysCount: number;      // 當月已簽到幾天
+            signedDaysCount: number;       // 當月已簽到幾天
         }
     };
 
@@ -134,7 +136,7 @@ export class DataManager {
                 id: i,
                 name: `鱘龍${i}號`,
                 gender: i % 2 === 0 ? "female" : "male",
-                stage: 3,
+                stage: 1,
                 growthDaysRequired: 10,
                 growthDaysPassed: 0,
                 lastFedDate: new Date().toISOString(),
@@ -166,13 +168,13 @@ export class DataManager {
             inventory: {
                 feeds: { normal: 666, premium: 66 },
                 items: {
-                    coldMedicine: 1,
-                    revivePotion: 1,
+                    coldMedicine: 0,
+                    revivePotion: 0,
                     genderPotion: 10,
                     upgradePotion: 10,
-                    heater: 1,
-                    fan: 1,
-                    cleaner: 2
+                    heater: 0,
+                    fan: 0,
+                    brush: 0
                 }
             },
             fashion: { owned: [] },
@@ -180,7 +182,7 @@ export class DataManager {
                 weekly: {
                     //weekIndex: 29, // 測試用
                     //daysSigned: [false, false, false, false, false, false, true], // 測試用
-                    weekIndex: this.getCurrentWeekIndex(),
+                    weekIndex: getCurrentWeekIndex(),
                     daysSigned: [false, false, false, false, false, false, false],
                     questionsCorrect: [false, false, false, false, false, false, false],
                     lastSignDate: ""
@@ -188,21 +190,13 @@ export class DataManager {
                 monthly: {
                     month: new Date().getMonth() + 1,
                     year: new Date().getFullYear(),
-                    signedDaysCount: 5
+                    signedDaysCount: 2
                 }
             }
         };
 
         await this.savePlayerData(newPlayer);
         console.log("玩家資料初始化完成！");
-    }
-
-    /** 判斷現在第幾週 */
-    static getCurrentWeekIndex(): number {
-        const now = new Date();
-        const firstDay = new Date(now.getFullYear(), 0, 1);
-        const days = Math.floor((now.getTime() - firstDay.getTime()) / (1000 * 60 * 60 * 24));
-        return Math.floor(days / 7);
     }
 
     static async getQuizQuestions(): Promise<{ question: string; options: string[]; answerIndex: number }[]> {
@@ -212,6 +206,14 @@ export class DataManager {
             const res = await fetch('/api/quiz');
             const data = await res.json();
             return data.questions;
+        }
+    }
+
+    /** 清除本地儲存的玩家資料（測試用） */
+    static clearPlayerData() {
+        if (this.useLocalStorage) {
+            localStorage.removeItem('playerData');
+            console.log('玩家資料已清除');
         }
     }
 }

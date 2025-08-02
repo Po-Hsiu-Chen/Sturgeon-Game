@@ -1,6 +1,7 @@
 import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, ProgressBar, UITransform, Vec3 } from 'cc';
 import { SwimmingFish } from './SwimmingFish';
 import { DataManager } from './DataManager';
+import { FishLogic } from './FishLogic';
 const { ccclass, property } = _decorator;
 
 @ccclass('GameManager')
@@ -34,16 +35,7 @@ export class GameManager extends Component {
         const msDiff = now.getTime() - lastLoginTime.getTime();
         const hoursPassed = msDiff / (1000 * 60 * 60);  // 精準到小時
         const daysPassed = Math.floor((Date.parse(today) - Date.parse(lastLoginDate)) / (1000 * 60 * 60 * 24));  // 整天
-
         const hungerPerHour = 100 / 72;  // 每小時增加的飢餓值
-        const stageRequirements = {
-            1: 10,
-            2: 20,
-            3: 40,
-            4: 50,
-            5: 60,
-            6: 999,
-        };
 
         for (const fish of playerData.fishList) {
             if (fish.isDead) continue;
@@ -59,17 +51,13 @@ export class GameManager extends Component {
                 continue;
             }
 
-            // 成長處理(以整天計)
+            // 成長處理（以整天計）
             if (daysPassed > 0) {
                 fish.growthDaysPassed += daysPassed;
 
-                if (fish.growthDaysPassed >= fish.growthDaysRequired && fish.stage < 6) {
-                    fish.stage++;
-                    fish.growthDaysPassed = 0;
-                    if (fish.stage < 6) {
-                        fish.growthDaysRequired = stageRequirements[fish.stage];
-                    }
-                    console.log(`${fish.name} 升級到第 ${fish.stage} 階！`);
+                const upgraded = FishLogic.tryStageUpgradeByGrowthDays(fish);
+                if (upgraded) {
+                    console.log(`${fish.name} 升級為第 ${fish.stage} 階！（自然長大）`);
                 }
             }
 
@@ -168,6 +156,10 @@ export class GameManager extends Component {
         }
 
         return newFishNode;
+    }
+
+    onClearPlayerData() {
+        DataManager.clearPlayerData();
     }
 
 }

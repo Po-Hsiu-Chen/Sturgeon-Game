@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Label, Sprite, SpriteFrame, EditBox, Vec3, tween } from 'cc';
+import { _decorator, Component, Node, Label, Sprite, SpriteFrame, EditBox, Vec3, tween, UITransform, UIOpacity } from 'cc';
 import { SwimmingFish } from './SwimmingFish';
 import { FishLogic } from './FishLogic';
 import { GameManager } from './GameManager';
@@ -52,7 +52,16 @@ export class UIManager extends Component {
     @property(Node) healSection: Node = null!;
     @property(Node) feedSection: Node = null!;
 
+    // 確認提示視窗
+    @property(Node) confirmDialogPanel: Node = null!;
+    @property(Label) confirmDialogText: Label = null!;
+    @property(Node) confirmDialogYesButton: Node = null!;
+    @property(Node) confirmDialogNoButton: Node = null!;
+
+    @property(Label) floatingText: Label = null!;
+
     private currentFishId: number = -1;
+    private confirmCallback: Function | null = null;
 
     /** 初始化 */
     start() {
@@ -68,6 +77,20 @@ export class UIManager extends Component {
 
         this.genderPotionBtn.on(Node.EventType.TOUCH_END, this.onUseGenderPotion, this);
         this.upgradePotionBtn.on(Node.EventType.TOUCH_END, this.onUseUpgradePotion, this);
+
+        this.confirmDialogYesButton.on(Node.EventType.TOUCH_END, () => {
+            if (this.confirmCallback) {
+                this.confirmCallback();
+                this.confirmCallback = null;
+            }
+            this.confirmDialogPanel.active = false;
+        }, this);
+
+        this.confirmDialogNoButton.on(Node.EventType.TOUCH_END, () => {
+            this.confirmCallback = null;
+            this.confirmDialogPanel.active = false;
+        }, this);
+
     }
 
     /** 顯示魚詳細資訊 */
@@ -135,6 +158,8 @@ export class UIManager extends Component {
         console.log(msg);
         await DataManager.savePlayerData(playerData);
         this.showFishDetail(fish);
+
+        this.showFloatingTextRightOf(this.hungerLabel.node, `餵食 +${amount}`);
     }
 
     /** 重新命名 */
@@ -183,7 +208,10 @@ export class UIManager extends Component {
     }
 
     /** 道具使用：變性 */
-    async onUseGenderPotion() {
+    onUseGenderPotion() {
+        this.showConfirmDialog("確定要使用變性藥水嗎？", () => this.useGenderPotion());
+    }
+    private async useGenderPotion() {
         const playerData = await DataManager.getPlayerData();
         const fish = playerData.fishList.find(f => f.id === this.currentFishId);
         if (!fish) return;
@@ -193,6 +221,8 @@ export class UIManager extends Component {
         console.log(msg);
         this.showFishDetail(fish); // 更新畫面
 
+        this.showFloatingTextRightOf(this.genderLabel.node, '變性完成！');
+
         const gameManager = this.node.scene.getComponentInChildren(GameManager); 
         if (gameManager) {
             gameManager.replaceFishNode(fish);  // 根據新性別產生對應 prefab
@@ -200,7 +230,10 @@ export class UIManager extends Component {
     }
 
     /** 道具使用：升級 */
-    async onUseUpgradePotion() {
+    onUseUpgradePotion() {
+        this.showConfirmDialog("確定要使用升級藥水嗎？", () => this.useUpgradePotion());
+    }
+    private async useUpgradePotion() {
         const playerData = await DataManager.getPlayerData();
         const fish = playerData.fishList.find(f => f.id === this.currentFishId);
         if (!fish) return;
@@ -210,6 +243,7 @@ export class UIManager extends Component {
         console.log(message);
 
         await this.showFishDetail(fish); // 更新資訊
+        this.showFloatingTextRightOf(this.daysLabel.node, '成長天數 +5');
 
         if (upgraded) {
             const gameManager = this.node.scene.getComponentInChildren(GameManager); 
@@ -218,7 +252,52 @@ export class UIManager extends Component {
             }
         }
     }
- 
+
+    showFloatingTextRightOf(targetNode: Node, text: string) {
+        const node = this.floatingText.node;
+        const uiOpacity = node.getComponent(UIOpacity);
+        if (!uiOpacity) {
+            console.warn('FloatingText node is missing UIOpacity component!');
+            return;
+        }
+
+        // 設定文字內容與起始狀態
+        this.floatingText.string = text;
+        node.active = true;
+        uiOpacity.opacity = 0;
+
+        // 取得 targetNode 的右側世界座標
+        const labelTransform = targetNode.getComponent(UITransform)!;
+        const worldRect = labelTransform.getBoundingBoxToWorld();
+        const worldPos = new Vec3(
+            worldRect.xMax + 10, // 右邊 + 偏移
+            (worldRect.yMin + worldRect.yMax) / 2, // 垂直置中
+            0
+        );
+
+        // 轉換為 local 座標
+        const parentTransform = node.parent!.getComponent(UITransform)!;
+        const localPos = parentTransform.convertToNodeSpaceAR(worldPos);
+
+        // 設定起始位置
+        node.setPosition(localPos);
+
+        const endPos = localPos.clone().add(new Vec3(0, 30, 0)); // 向上漂浮
+
+        // 透明度動畫（使用 UIOpacity）
+        tween(uiOpacity)
+            .to(0.1, { opacity: 255 })     // 淡入
+            .delay(0.4)                    // 停留一下
+            .to(0.2, { opacity: 0 })       // 淡出
+            .call(() => node.active = false)
+            .start();
+
+        // 位移動畫（針對 Node 本身）
+        tween(node)
+            .to(0.6, { position: endPos }, { easing: 'quadOut' }) // 漂浮
+            .start();
+    }
+
     hideAllSubPanels() {
         this.RenamePanel.active = false;
         // 之後所有需要關起來的 panel
@@ -242,4 +321,11 @@ export class UIManager extends Component {
     hideRenamePanel() {
         this.RenamePanel.active = false;
     }
+
+    showConfirmDialog(message: string, onConfirm: Function) {
+        this.confirmDialogText.string = message;
+        this.confirmDialogPanel.active = true;
+        this.confirmCallback = onConfirm;
+    }
+
 }
