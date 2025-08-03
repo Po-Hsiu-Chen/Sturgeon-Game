@@ -7,20 +7,21 @@ const { ccclass, property } = _decorator;
 @ccclass('GameManager')
 export class GameManager extends Component {
 
-    @property(Node)
-    fishArea: Node = null!;  // 魚可以活動的區域
+    @property(Node) fishArea: Node = null!;  // 魚可以活動的區域
+    @property([Prefab]) maleFishPrefabsByStage: Prefab[] = [];  // 公魚：第1~6階
+    @property([Prefab]) femaleFishPrefabsByStage: Prefab[] = [];  // 母魚：第1~6階
+    @property(Node) signInPanel: Node = null!; // 簽到面板
 
-    @property([Prefab])
-    maleFishPrefabsByStage: Prefab[] = [];  // 公魚：第1~6階
-
-    @property([Prefab])
-    femaleFishPrefabsByStage: Prefab[] = [];  // 母魚：第1~6階
+    private currentTankId: number = 1;
 
     /** 初始化 */
     async start() {
         await DataManager.ensureInitialized(); // 初始化資料
         await this.processDailyUpdate();       // 更新魚的狀態
-        await this.spawnAllFish();             // 產生魚
+        await this.switchTank(1);              // 預設顯示主魚缸
+        if (this.signInPanel) {
+            this.signInPanel.active = true;    // 預設打開簽到面板
+        } 
     }
 
     /** 處理魚飢餓與成長 */
@@ -46,6 +47,7 @@ export class GameManager extends Component {
 
             if (fish.hunger >= 100) {
                 fish.isDead = true;
+                fish.deathDate = new Date().toISOString().split('T')[0]; // e.g., '2025/08/02'
                 fish.emotion = "dead";
                 console.log(`${fish.name} 因飢餓過久而死亡`);
                 continue;
@@ -73,48 +75,51 @@ export class GameManager extends Component {
         console.log(`更新完成：經過 ${hoursPassed.toFixed(2)} 小時，飢餓與成長資料已更新`);
     }
 
-    /** 生成所有魚的實體節點 */
-    async spawnAllFish() {
+    /** 生成魚的實體節點 */
+    async spawnFishInTank(tankId: number) {
+        this.fishArea.removeAllChildren(); // 清除上一缸魚
+
         const playerData = await DataManager.getPlayerData();
-        const fishList = playerData.fishList;
+        const tank = playerData.tankList.find(t => t.id === tankId);
+        if (!tank) {
+            console.warn(`找不到魚缸 ${tankId}`);
+            return;
+        }
+
         const fishAreaTransform = this.fishArea.getComponent(UITransform);
         const width = fishAreaTransform.width;
         const height = fishAreaTransform.height;
         const margin = 50;
 
-        for (const fish of fishList) {
-            let prefab: Prefab | null = null;
+        for (const fishId of tank.fishIds) {
+            const fish = playerData.fishList.find(f => f.id === fishId);
+            if (!fish || fish.isDead) continue;
 
-            if (fish.gender === "female") {
-                prefab = this.femaleFishPrefabsByStage[fish.stage - 1];
-            } else {
-                prefab = this.maleFishPrefabsByStage[fish.stage - 1];
-            }
+            let prefab = fish.gender === "female"
+                ? this.femaleFishPrefabsByStage[fish.stage - 1]
+                : this.maleFishPrefabsByStage[fish.stage - 1];
 
-            if (!prefab) {
-                console.warn(`找不到 ${fish.gender} 的階段 ${fish.stage} 魚 prefab`);
-                continue;
-            }
+            if (!prefab) continue;
 
             const fishNode = instantiate(prefab);
-            const swimmingFish = fishNode.getComponent(SwimmingFish);
-            if (swimmingFish) {
-                swimmingFish.setFishData(fish);
-            }
+            fishNode.name = `Fish_${fish.id}`;
 
             // 隨機位置與方向
             const randX = Math.random() * (width - margin * 2) - (width / 2 - margin);
             const randY = Math.random() * (height - margin * 2) - (height / 2 - margin);
-            const initialDirection = Math.random() > 0.5 ? 1 : -1;
+            const direction = Math.random() > 0.5 ? 1 : -1;
 
-            fishNode.name = `Fish_${fish.id}`;
             fishNode.setPosition(randX, randY, 0);
-            fishNode.setScale(new Vec3(initialDirection, 1, 1));
-            fishNode["initialDirection"] = initialDirection;
+            fishNode.setScale(new Vec3(direction, 1, 1));
+            fishNode["initialDirection"] = direction;
+
+            const swimmingFish = fishNode.getComponent(SwimmingFish);
+            swimmingFish?.setFishData(fish);
 
             this.fishArea.addChild(fishNode);
-            console.log(`生成${fish.gender === 'female' ? '母魚' : '公魚'} ${fish.name}（階段 ${fish.stage}）於 (${randX}, ${randY})`);
         }
+
+        this.currentTankId = tankId;
     }
 
     /** 替換Prefab(變性用) */
@@ -158,8 +163,8 @@ export class GameManager extends Component {
         return newFishNode;
     }
 
-    onClearPlayerData() {
-        DataManager.clearPlayerData();
+    async switchTank(tankId: number) {
+        await this.spawnFishInTank(tankId);
     }
 
 }

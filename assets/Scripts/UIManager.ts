@@ -2,7 +2,7 @@ import { _decorator, Component, Node, Label, Sprite, SpriteFrame, EditBox, Vec3,
 import { SwimmingFish } from './SwimmingFish';
 import { FishLogic } from './FishLogic';
 import { GameManager } from './GameManager';
-import { DataManager } from './DataManager';
+import { DataManager, FishData } from './DataManager';
 const { ccclass, property } = _decorator;
 
 @ccclass('UIManager')
@@ -209,7 +209,7 @@ export class UIManager extends Component {
 
     /** 道具使用：變性 */
     onUseGenderPotion() {
-        this.showConfirmDialog("確定要使用變性藥水嗎？", () => this.useGenderPotion());
+        this.showConfirmDialog("確定要使用變性藥嗎？", () => this.useGenderPotion());
     }
     private async useGenderPotion() {
         const playerData = await DataManager.getPlayerData();
@@ -231,7 +231,7 @@ export class UIManager extends Component {
 
     /** 道具使用：升級 */
     onUseUpgradePotion() {
-        this.showConfirmDialog("確定要使用升級藥水嗎？", () => this.useUpgradePotion());
+        this.showConfirmDialog("確定要使用升級藥嗎？", () => this.useUpgradePotion());
     }
     private async useUpgradePotion() {
         const playerData = await DataManager.getPlayerData();

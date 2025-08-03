@@ -37,6 +37,7 @@ export interface FishData {
     status: FishStatus;                 // 即時狀態
     emotion: "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "dead";  // 情緒狀態
     isDead: boolean;                     // 是否死了
+    deathDate?: string;                  // 死掉時間
 }
 
 /** 魚缸 */
@@ -169,7 +170,7 @@ export class DataManager {
                 feeds: { normal: 666, premium: 66 },
                 items: {
                     coldMedicine: 0,
-                    revivePotion: 0,
+                    revivePotion: 10,
                     genderPotion: 10,
                     upgradePotion: 10,
                     heater: 0,
