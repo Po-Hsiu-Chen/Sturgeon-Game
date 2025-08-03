@@ -1028,8 +1028,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 132.7,
-      "height": 40
+      "width": 148.5,
+      "height": 52.6
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -1060,12 +1060,12 @@
     "_color": {
       "__type__": "cc.Color",
       "r": 255,
-      "g": 204,
-      "b": 68,
+      "g": 255,
+      "b": 255,
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "9d14bd5f-4954-49b9-8c8a-1f2d308f182b@f9941",
+      "__uuid__": "4abf3eba-c622-4c32-9beb-17db4f49b7bb@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 1,
@@ -1135,7 +1135,7 @@
       "a": 255
     },
     "_normalSprite": {
-      "__uuid__": "9d14bd5f-4954-49b9-8c8a-1f2d308f182b@f9941",
+      "__uuid__": "4abf3eba-c622-4c32-9beb-17db4f49b7bb@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_hoverSprite": null,
@@ -1728,6 +1728,7 @@
       "__id__": 0
     },
     "fileId": "44nFzIe9RMdpZZAFK0tQt2",
+    "instance": null,
     "targetOverrides": [],
     "nestedPrefabInstanceRoots": [
       {

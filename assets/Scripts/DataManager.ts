@@ -25,19 +25,19 @@ export interface FishData {
     name: string;                        // 名字
     gender: "male" | "female";           // 性別
     stage: number;                       // 成長階段（1 = 魚卵）
-    growthDaysRequired: number;          // 每個階段需要的天數
-    growthDaysPassed: number;           // 已經經過的天數
+    growthDaysPassed: number;            // 已經經過的天數
     lastFedDate: string;                 // 最後一次被餵的時間
     hunger: number;                      // 飢餓值（0 = 飽）
-    hungerRateMultiplier: number;       // 飢餓速度倍率
-    appearance: "ugly" | "beautiful";   // 外觀美醜
-    outfit: FishOutfit;                 // 時裝資訊
-    isMarried: boolean;                 // 是否已婚
-    spouseId: number | null;            // 配偶 ID
-    status: FishStatus;                 // 即時狀態
+    hungerRateMultiplier: number;        // 飢餓速度倍率
+    appearance: "ugly" | "beautiful";    // 外觀美醜
+    outfit: FishOutfit;                  // 時裝資訊
+    isMarried: boolean;                  // 是否已婚
+    spouseId: number | null;             // 配偶 ID
+    status: FishStatus;                  // 即時狀態
     emotion: "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "dead";  // 情緒狀態
     isDead: boolean;                     // 是否死了
     deathDate?: string;                  // 死掉時間
+    tankId: number;                      // 所在魚缸
 }
 
 /** 魚缸 */
@@ -137,9 +137,10 @@ export class DataManager {
                 id: i,
                 name: `鱘龍${i}號`,
                 gender: i % 2 === 0 ? "female" : "male",
-                stage: 1,
-                growthDaysRequired: 10,
-                growthDaysPassed: 0,
+                // stage: 1,
+                // growthDaysPassed: 0,
+                stage: 2, // 測試用
+                growthDaysPassed: 25, // 測試用
                 lastFedDate: new Date().toISOString(),
                 hunger: 33,
                 hungerRateMultiplier: 1.0,
@@ -149,7 +150,8 @@ export class DataManager {
                 spouseId: null,
                 status: { hungry: false, hot: false, cold: false, sick: false },
                 emotion: "happy",
-                isDead: false
+                isDead: false,
+                tankId: 1
             });
         }
 

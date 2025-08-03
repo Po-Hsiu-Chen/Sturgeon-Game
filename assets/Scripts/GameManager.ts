@@ -1,7 +1,8 @@
-import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, ProgressBar, UITransform, Vec3 } from 'cc';
+import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, ProgressBar, UITransform, Vec3, Button } from 'cc';
 import { SwimmingFish } from './SwimmingFish';
 import { DataManager } from './DataManager';
 import { FishLogic } from './FishLogic';
+import { TombManager } from './TombManager';
 const { ccclass, property } = _decorator;
 
 @ccclass('GameManager')
@@ -11,6 +12,15 @@ export class GameManager extends Component {
     @property([Prefab]) maleFishPrefabsByStage: Prefab[] = [];  // 公魚：第1~6階
     @property([Prefab]) femaleFishPrefabsByStage: Prefab[] = [];  // 母魚：第1~6階
     @property(Node) signInPanel: Node = null!; // 簽到面板
+    @property([Button]) tankButtons: Button[] = [];
+    @property(Button) tombTankBtn: Button = null!;
+    @property([Node]) tankNodes: Node[] = [];
+    @property(Node) tombTankNode: Node = null!;
+    @property(TombManager) tombManager: TombManager = null!;
+
+    @property(Node) deathNoticePanel: Node = null!;
+    @property(Label) deathNoticeLabel: Label = null!;
+    @property(Button) deathNoticeCloseBtn: Button = null!;
 
     private currentTankId: number = 1;
 
@@ -18,10 +28,86 @@ export class GameManager extends Component {
     async start() {
         await DataManager.ensureInitialized(); // 初始化資料
         await this.processDailyUpdate();       // 更新魚的狀態
+
+        this.initTankButtons();
         await this.switchTank(1);              // 預設顯示主魚缸
+        await this.tombManager?.init();
+
         if (this.signInPanel) {
             this.signInPanel.active = true;    // 預設打開簽到面板
         } 
+        this.deathNoticeCloseBtn.node.on(Node.EventType.TOUCH_END, () => {
+            this.deathNoticePanel.active = false;
+        });
+
+    }
+
+    initTankButtons() {
+        this.tankButtons.forEach((btn, index) => {
+            btn.node.on(Node.EventType.TOUCH_END, () => {
+                this.switchTank(index + 1);
+            });
+        });
+
+        this.tombTankBtn.node.on(Node.EventType.TOUCH_END, () => {
+            this.switchToTombTank();
+        });
+    }
+
+    async switchTank(tankId: number) {
+        this.tankNodes.forEach((node, idx) => {
+            node.active = (idx + 1) === tankId;
+        });
+        this.tombTankNode.active = false;
+
+        this.fishArea.removeAllChildren();
+        const playerData = await DataManager.getPlayerData();
+        const tank = playerData.tankList.find(t => t.id === tankId);
+        if (!tank) {
+            console.warn(`找不到魚缸 ${tankId}`);
+            return;
+        }
+
+        const area = this.fishArea.getComponent(UITransform)!;
+        const width = area.width;
+        const height = area.height;
+        const margin = 50;
+
+        for (const fishId of tank.fishIds) {
+            const fish = playerData.fishList.find(f => f.id === fishId);
+            if (!fish || fish.isDead) continue;
+
+            const prefab = fish.gender === "female"
+                ? this.femaleFishPrefabsByStage[fish.stage - 1]
+                : this.maleFishPrefabsByStage[fish.stage - 1];
+
+            if (!prefab) continue;
+
+            const fishNode = instantiate(prefab);
+            fishNode.name = `Fish_${fish.id}`;
+
+            const randX = Math.random() * (width - margin * 2) - (width / 2 - margin);
+            const randY = Math.random() * (height - margin * 2) - (height / 2 - margin);
+            const direction = Math.random() > 0.5 ? 1 : -1;
+
+            fishNode.setPosition(randX, randY, 0);
+            fishNode.setScale(new Vec3(direction, 1, 1));
+            fishNode["initialDirection"] = direction;
+
+            const swimmingFish = fishNode.getComponent(SwimmingFish);
+            swimmingFish?.setFishData(fish);
+
+            this.fishArea.addChild(fishNode);
+        }
+
+        this.currentTankId = tankId;
+    }
+
+    async switchToTombTank() {
+        this.tankNodes.forEach(node => node.active = false);
+        this.tombTankNode.active = true;
+
+        await this.tombManager?.refreshTombs();
     }
 
     /** 處理魚飢餓與成長 */
@@ -38,17 +124,21 @@ export class GameManager extends Component {
         const daysPassed = Math.floor((Date.parse(today) - Date.parse(lastLoginDate)) / (1000 * 60 * 60 * 24));  // 整天
         const hungerPerHour = 100 / 72;  // 每小時增加的飢餓值
 
+        let deadFishNames: string[] = [];
+
         for (const fish of playerData.fishList) {
             if (fish.isDead) continue;
 
             // 飢餓更新
             fish.hunger += hoursPassed * hungerPerHour;
             fish.hunger = Math.min(fish.hunger, 100);
-
+            
+            // 魚飢餓過久而死亡
             if (fish.hunger >= 100) {
                 fish.isDead = true;
-                fish.deathDate = new Date().toISOString().split('T')[0]; // e.g., '2025/08/02'
+                fish.deathDate = new Date().toISOString().split('T')[0];
                 fish.emotion = "dead";
+                deadFishNames.push(fish.name);
                 console.log(`${fish.name} 因飢餓過久而死亡`);
                 continue;
             }
@@ -67,6 +157,12 @@ export class GameManager extends Component {
             fish.emotion = fish.hunger >= 80 ? "hungry" : "happy";
         }
 
+        if (deadFishNames.length > 0) {
+            const nameList = deadFishNames.join('、');
+            const message = `${nameList} 因為太餓，沒能撐下去...\n但牠的記憶還在某個地方等你`;
+            this.showDeathNotice(message);
+        }
+        
         // 更新記錄的時間
         playerData.lastLoginDate = today;
         playerData.lastLoginTime = now.toISOString();
@@ -162,9 +258,9 @@ export class GameManager extends Component {
 
         return newFishNode;
     }
-
-    async switchTank(tankId: number) {
-        await this.spawnFishInTank(tankId);
+    
+    showDeathNotice(message: string) {
+        this.deathNoticeLabel.string = message;
+        this.deathNoticePanel.active = true;
     }
-
 }

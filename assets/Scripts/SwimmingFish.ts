@@ -6,6 +6,7 @@ const { ccclass, property } = _decorator;
 
 @ccclass('SwimmingFish')
 export class SwimmingFish extends Component {
+    
     /** 與魚資料相關的屬性 */
     public fishData: FishData = null!;  // 魚的資料（從 GameManager 傳入）
     static currentSelectedFish: SwimmingFish | null = null;  // 目前被選中的魚
@@ -108,7 +109,7 @@ export class SwimmingFish extends Component {
         const fishId = parseInt(this.node.name.split('_')[1]);
         const fishData = playerData.fishList.find(f => f.id === fishId);
 
-        const uiManager = find('Canvas/UIManager')?.getComponent(UIManager);
+        const uiManager = find('/UIManager')?.getComponent(UIManager);
         uiManager?.showFishDetail(fishData);
     }
 }

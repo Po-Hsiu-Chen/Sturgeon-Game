@@ -127,7 +127,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 53.349609375,
+      "width": 44.54689025878906,
       "height": 26.838
     },
     "_anchorPoint": {
@@ -166,8 +166,8 @@
     "_string": "Name",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 20,
-    "_fontSize": 20,
+    "_actualFontSize": 16.7,
+    "_fontSize": 16.7,
     "_fontFamily": "Arial",
     "_lineHeight": 21.3,
     "_overflow": 0,
