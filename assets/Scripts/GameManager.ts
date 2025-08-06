@@ -1,8 +1,9 @@
-import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, ProgressBar, UITransform, Vec3, Button } from 'cc';
+import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, ProgressBar, UITransform, Vec3, Button, tween, UIOpacity } from 'cc';
 import { SwimmingFish } from './SwimmingFish';
 import { DataManager } from './DataManager';
 import { FishLogic } from './FishLogic';
 import { TombManager } from './TombManager';
+import { TankEnvironmentManager } from './TankEnvironmentManager';
 const { ccclass, property } = _decorator;
 
 @ccclass('GameManager')
@@ -22,6 +23,32 @@ export class GameManager extends Component {
     @property(Label) deathNoticeLabel: Label = null!;
     @property(Button) deathNoticeCloseBtn: Button = null!;
 
+    // 環境資訊
+    @property(Label) temperatureLabel: Label = null!;
+    @property(Label) waterQualityLabel: Label = null!;
+
+    // 道具按鈕
+    @property(Button) heaterBtn: Button = null!;
+    @property(Button) fanBtn: Button = null!;
+    @property(Button) brushBtn: Button = null!;
+
+    // 道具數量顯示
+    @property(Label) heaterCountLabel: Label = null!;
+    @property(Label) fanCountLabel: Label = null!;
+    @property(Label) brushCountLabel: Label = null!;
+
+    @property(Node) floatingNode: Node = null!;
+
+
+    // 環境效果
+    @property(Node) dirtyWaterOverlay: Node = null!;
+    @property(Node) coldOverlay: Node = null!;
+    @property(Node) hotOverlay: Node = null!;  
+
+    // 溫度區間
+    @property minComfortTemp: number = 18; 
+    @property maxComfortTemp: number = 23; 
+
     private currentTankId: number = 1;
 
     /** 初始化 */
@@ -29,7 +56,8 @@ export class GameManager extends Component {
         await DataManager.ensureInitialized(); // 初始化資料
         await this.processDailyUpdate();       // 更新魚的狀態
 
-        this.initTankButtons();
+        this.initButtons();
+        
         await this.switchTank(1);              // 預設顯示主魚缸
         await this.tombManager?.init();
 
@@ -40,9 +68,10 @@ export class GameManager extends Component {
             this.deathNoticePanel.active = false;
         });
 
+        await this.refreshEnvironmentUI();
     }
 
-    initTankButtons() {
+    initButtons() {
         this.tankButtons.forEach((btn, index) => {
             btn.node.on(Node.EventType.TOUCH_END, () => {
                 this.switchTank(index + 1);
@@ -52,6 +81,10 @@ export class GameManager extends Component {
         this.tombTankBtn.node.on(Node.EventType.TOUCH_END, () => {
             this.switchToTombTank();
         });
+
+        this.heaterBtn?.node.on(Node.EventType.TOUCH_END, () => this.onClickHeater());
+        this.fanBtn?.node.on(Node.EventType.TOUCH_END, () => this.onClickFan());
+        this.brushBtn?.node.on(Node.EventType.TOUCH_END, () => this.onClickBrush());
     }
 
     async switchTank(tankId: number) {
@@ -114,29 +147,34 @@ export class GameManager extends Component {
     async processDailyUpdate() {
         const playerData = await DataManager.getPlayerData();
         const now = new Date();
-        const today = now.toISOString().split('T')[0];  // 只取日期部分
+        const today = now.toISOString().split('T')[0];
         const lastLoginDate = playerData.lastLoginDate || today;
-        const lastLoginTime = new Date(playerData.lastLoginTime || now);  // 時間部分
+        const lastLoginTime = new Date(playerData.lastLoginTime || now);
+        const env = playerData.tankEnvironment;
 
-        // 計算時間差
-        const msDiff = now.getTime() - lastLoginTime.getTime();
-        const hoursPassed = msDiff / (1000 * 60 * 60);  // 精準到小時
-        const daysPassed = Math.floor((Date.parse(today) - Date.parse(lastLoginDate)) / (1000 * 60 * 60 * 24));  // 整天
-        const hungerPerHour = 100 / 72;  // 每小時增加的飢餓值
+        const hoursPassed = (now.getTime() - lastLoginTime.getTime()) / (1000 * 60 * 60);
+        const daysPassed = Math.floor((Date.parse(today) - Date.parse(lastLoginDate)) / (1000 * 60 * 60 * 24));
 
+        const baseHungerPerHour = 100 / 72; // 基礎飢餓速率
         let deadFishNames: string[] = [];
 
+        // 飢餓與成長
         for (const fish of playerData.fishList) {
             if (fish.isDead) continue;
 
-            // 飢餓更新
-            fish.hunger += hoursPassed * hungerPerHour;
+            // 套用倍率（自帶倍率 × 生病倍率）
+            const mulBase = fish.hungerRateMultiplier ?? 1;
+            const mulSick = (fish.status?.sick ? 1.5 : 1); // 生病 1.5 倍
+            const effectiveRate = baseHungerPerHour * mulBase * mulSick;
+
+            // 飢餓更新（套用有效倍率）
+            fish.hunger += hoursPassed * effectiveRate;
             fish.hunger = Math.min(fish.hunger, 100);
             
             // 魚飢餓過久而死亡
             if (fish.hunger >= 100) {
                 fish.isDead = true;
-                fish.deathDate = new Date().toISOString().split('T')[0];
+                fish.deathDate = today;
                 fish.emotion = "dead";
                 deadFishNames.push(fish.name);
                 console.log(`${fish.name} 因飢餓過久而死亡`);
@@ -152,22 +190,47 @@ export class GameManager extends Component {
                     console.log(`${fish.name} 升級為第 ${fish.stage} 階！（自然長大）`);
                 }
             }
-
+            
             // 情緒更新
-            fish.emotion = fish.hunger >= 80 ? "hungry" : "happy";
+            if (fish.hunger >= 80) {
+                fish.emotion = "hungry";
+            }
         }
 
+        // 登入日累加（只在跨日登入時加 1）
+        if (env.loginDaysSinceClean == null) env.loginDaysSinceClean = 0;
+        if (daysPassed > 0) {
+            env.loginDaysSinceClean += 1;
+        }
+        
+        // 更新環境（水溫與水質）
+        if (TankEnvironmentManager.shouldUpdateTemperature(playerData)) {
+            TankEnvironmentManager.updateTemperature(playerData);
+        }
+        TankEnvironmentManager.checkWaterDirty(playerData);
+
+        // 感冒處理：隨機挑 1 隻感冒
+        if (TankEnvironmentManager.shouldCauseCold(playerData)) {
+            const candidates = playerData.fishList.filter(f => !f.isDead && !f.status.sick);
+            if (candidates.length > 0) {
+                const idx = Math.floor(Math.random() * candidates.length);
+                candidates[idx].status.sick = true;
+            }
+        }
+
+        // 魚掰掰通知
         if (deadFishNames.length > 0) {
             const nameList = deadFishNames.join('、');
-            const message = `${nameList} 因為太餓，沒能撐下去...\n但牠的記憶還在某個地方等你`;
+            const message = `${nameList}\n因為太餓，沒能撐下去...\n但牠的記憶還在某個地方等你`;
             this.showDeathNotice(message);
         }
         
         // 更新記錄的時間
         playerData.lastLoginDate = today;
         playerData.lastLoginTime = now.toISOString();
-
         await DataManager.savePlayerData(playerData);
+
+        await this.refreshEnvironmentUI();
         console.log(`更新完成：經過 ${hoursPassed.toFixed(2)} 小時，飢餓與成長資料已更新`);
     }
 
@@ -263,4 +326,133 @@ export class GameManager extends Component {
         this.deathNoticeLabel.string = message;
         this.deathNoticePanel.active = true;
     }
+
+    /** 資料刷新 */
+    async refreshEnvironmentUI() {
+        const playerData = await DataManager.getPlayerData();
+        if (!playerData) return;
+
+        const env = playerData.tankEnvironment;
+        const items = playerData.inventory.items;
+
+        // 水溫、水質顯示
+        if (this.temperatureLabel) this.temperatureLabel.string = `水溫 : ${env.temperature.toFixed(1)}°C`;
+        if (this.waterQualityLabel) this.waterQualityLabel.string = env.waterQualityStatus === 'clean' ? '水質 : 乾淨' : '水質 : 髒';
+
+        // 顯示髒水遮罩
+        if (this.dirtyWaterOverlay) {
+            this.dirtyWaterOverlay.active = (env.waterQualityStatus !== 'clean');
+        }
+
+        // 道具數量
+        if (this.heaterCountLabel) this.heaterCountLabel.string = `${items.heater}`;
+        if (this.fanCountLabel) this.fanCountLabel.string = `${items.fan}`;
+        if (this.brushCountLabel) this.brushCountLabel.string = `${items.brush}`;
+
+        // 按鈕能否點擊
+        if (this.heaterBtn) this.heaterBtn.interactable = items.heater > 0;
+        if (this.fanBtn) this.fanBtn.interactable = items.fan > 0;
+        if (this.brushBtn) this.brushBtn.interactable = items.brush > 0;
+
+        this.updateEnvironmentOverlays(env);
+    }
+
+    /** 使用加熱器 */
+    async onClickHeater() {
+        const playerData = await DataManager.getPlayerData();
+        const items = playerData.inventory.items;
+
+        if (items.heater <= 0) {
+            this.showFloatingTextCenter('加熱器不足');
+            return;
+        }
+
+        items.heater -= 1;
+        TankEnvironmentManager.adjustTemperature(playerData);
+
+        await DataManager.savePlayerData(playerData);
+        await this.refreshEnvironmentUI();
+    }
+
+    /** 使用風扇 */
+    async onClickFan() {
+        const playerData = await DataManager.getPlayerData();
+        const items = playerData.inventory.items;
+
+        if (items.fan <= 0) {
+            this.showFloatingTextCenter('風扇不足');
+            return;
+        }
+
+        items.fan -= 1;
+        TankEnvironmentManager.adjustTemperature(playerData);
+
+        await DataManager.savePlayerData(playerData);
+        await this.refreshEnvironmentUI();
+    }
+
+    /** 使用魚缸刷 */
+    async onClickBrush() {
+        const playerData = await DataManager.getPlayerData();
+        const items = playerData.inventory.items;
+
+        if (items.brush <= 0) {
+            this.showFloatingTextCenter('魚缸刷不足');
+            return;
+        }
+
+        items.brush -= 1;
+        TankEnvironmentManager.cleanWater(playerData);
+
+        await DataManager.savePlayerData(playerData);
+        await this.refreshEnvironmentUI();
+    }
+
+    private updateEnvironmentOverlays(env: any) {
+        const isDirty = env.waterQualityStatus !== 'clean';
+        const tooCold = env.temperature < this.minComfortTemp;
+        const tooHot  = env.temperature > this.maxComfortTemp;
+
+        if (this.dirtyWaterOverlay) this.dirtyWaterOverlay.active = isDirty;
+        if (this.coldOverlay) this.coldOverlay.active = !isDirty && tooCold; // 髒水優先
+        if (this.hotOverlay)  this.hotOverlay.active  = !isDirty && tooHot;  // 髒水優先
+    }
+
+    showFloatingTextCenter(text: string) {
+        const node = this.floatingNode;
+        const label = node?.getComponentInChildren(Label);
+        const uiOpacity = node?.getComponent(UIOpacity);
+
+        if (!node || !label || !uiOpacity) {
+            console.warn('floatingNode 缺少 Node / Label / UIOpacity 元件');
+            return;
+        }
+
+        // 停掉先前動畫
+        tween(node).stop();
+        tween(uiOpacity).stop();
+
+        label.string = text;
+        node.active = true;
+        uiOpacity.opacity = 0;
+
+        const startPos = new Vec3(0, 0, 0);
+        const endPos = new Vec3(0, 30, 0);
+
+        node.setPosition(startPos);
+
+        // 淡入 -> 停留 -> 淡出
+        tween(uiOpacity)
+            .to(0.3, { opacity: 255 })
+            .delay(1.2) // 道具提示可比墓園短一點
+            .to(0.4, { opacity: 0 })
+            .call(() => node.active = false)
+            .start();
+
+        // 上浮位移
+        tween(node)
+            .to(1.2, { position: endPos }, { easing: 'quadOut' })
+            .start();
+    }
+
 }

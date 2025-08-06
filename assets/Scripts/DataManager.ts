@@ -34,18 +34,26 @@ export interface FishData {
     isMarried: boolean;                  // 是否已婚
     spouseId: number | null;             // 配偶 ID
     status: FishStatus;                  // 即時狀態
-    emotion: "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "dead";  // 情緒狀態
+    emotion: "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "dead" | "sick";  // 情緒狀態
     isDead: boolean;                     // 是否死了
     deathDate?: string;                  // 死掉時間
     tankId: number;                      // 所在魚缸
+}
+
+/** 共用魚缸環境 */
+interface TankEnvironment {
+    temperature: number;                    // 當前水溫（°C）
+    lastTempUpdateTime: string;             // 上次更新水溫的時間
+    waterQualityStatus: "clean" | "dirty";  // 水質狀態
+    lastCleanTime: string;                  // 上次清理時間
+    isTemperatureDanger: boolean;           // 是否水溫異常（登入後根據時間計算）
+    loginDaysSinceClean: number;            // 清缸後累積的登入天數
 }
 
 /** 魚缸 */
 interface TankData {
     id: number;             // 魚缸 ID
     name: string;           // 魚缸名稱
-    waterQuality: number;   // 水質（0~100 暫定）
-    temperature: number;    // 水溫（單位°C）
     comfort: number;        // 舒適度（0~100 暫定）
     fishIds: number[];      // 此魚缸內的魚 ID 陣列
 }
@@ -58,6 +66,7 @@ export interface PlayerData {
     lastLoginTime: string;         // 用來計算小時差（飢餓值用）
     fishList: FishData[];          // 擁有的魚列表
     tankList: TankData[];          // 擁有的魚缸列表
+    tankEnvironment: TankEnvironment;  // 魚缸環境狀態
     inventory: {
         feeds: {
             normal: number;        // 普通飼料數量
@@ -168,6 +177,14 @@ export class DataManager {
                 comfort: 80,
                 fishIds: [1, 2, 3]
             }],
+            tankEnvironment: {
+                temperature: 21,
+                lastTempUpdateTime: new Date().toISOString(),
+                waterQualityStatus: "clean",
+                lastCleanTime: new Date().toISOString(),
+                isTemperatureDanger: false,
+                loginDaysSinceClean: 0,
+            },
             inventory: {
                 feeds: { normal: 666, premium: 66 },
                 items: {
@@ -175,9 +192,9 @@ export class DataManager {
                     revivePotion: 10,
                     genderPotion: 10,
                     upgradePotion: 10,
-                    heater: 0,
-                    fan: 0,
-                    brush: 0
+                    heater: 10,
+                    fan: 15,
+                    brush: 17
                 }
             },
             fashion: { owned: [] },

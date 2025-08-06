@@ -50,7 +50,7 @@ export const quizQuestions = [
         answerIndex: 0
     },
     {
-        question: "下列哪種烹調方式可保留最多 Omega 3?",
+        question: "下列哪種烹調方式可保留最多 Omega-3?",
         options: ["清蒸", "高溫油炸", "低溫烘烤"],
         answerIndex: 0
     },

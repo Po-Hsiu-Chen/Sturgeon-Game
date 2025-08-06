@@ -5,52 +5,57 @@ import { GameManager } from './GameManager';
 import { DataManager, FishData } from './DataManager';
 const { ccclass, property } = _decorator;
 
-@ccclass('UIManager')
-export class UIManager extends Component {
-    @property(Node)
-    fishDetailPanel: Node = null!;
+@ccclass('FishDetailManager')
+export class FishDetailManager extends Component {
+    @property(Node) fishDetailPanel: Node = null!;
 
     // Title and InfoSection
     @property(Label) fishNameLabel: Label = null!;
+    @property(Label) stageLabel: Label = null!;
+    @property(Node) renameButton: Node = null!;
     @property(Label) genderLabel: Label = null!;
     @property(Label) daysLabel: Label = null!;
-    @property(Label) stageLabel: Label = null!;
     @property(Label) hungerLabel: Label = null!;
     @property(Sprite) fishStatusImage: Sprite = null!;
+    @property(Label) floatingText: Label = null!;
+    
+    // Fashion 相關
+    @property(Node) fashionSection: Node = null!;
+    @property(Node) fashionTabButton: Node = null!;
 
-    // 飼料相關
-    @property(Node) feedBtnNormal: Node = null!;
-    @property(Node) feedBtnPremium: Node = null!;
-    @property(Label) feedNormalCountLabel: Label = null!;
-    @property(Label) feedPremiumCountLabel: Label = null!;
-
-    // 道具相關
+    // Heal 相關
+    @property(Node) healSection: Node = null!;
+    @property(Node) healTabButton: Node = null!;
     @property(Node) genderPotionBtn: Node = null!;
     @property(Node) upgradePotionBtn: Node = null!;
     @property(Label) genderPotionCountLabel: Label = null!;
     @property(Label) upgradePotionCountLabel: Label = null!;
 
+    // Feed 相關
+    @property(Node) feedSection: Node = null!;
+    @property(Node) feedTabButton: Node = null!;
+    @property(Node) feedBtnNormal: Node = null!;
+    @property(Node) feedBtnPremium: Node = null!;
+    @property(Label) feedNormalCountLabel: Label = null!;
+    @property(Label) feedPremiumCountLabel: Label = null!;
+
     // 關閉按鈕
     @property(Node) closeButton: Node = null!;
 
-    // 情緒圖片 (暫時先放兩個)
+    // 情緒圖片 
     @property(SpriteFrame) happySprite: SpriteFrame = null!;
     @property(SpriteFrame) sadSprite: SpriteFrame = null!;
+    @property(SpriteFrame) angrySprite: SpriteFrame = null!;
+    @property(SpriteFrame) hungrySprite: SpriteFrame = null!;
+    @property(SpriteFrame) coldSprite: SpriteFrame = null!;
+    @property(SpriteFrame) hotSprite: SpriteFrame = null!;
+    @property(SpriteFrame) sickSprite: SpriteFrame = null!;
 
-    // 改名字相關
+    // Rename Panel 相關
     @property(Node) RenamePanel: Node = null!;
     @property(EditBox) renameInput: EditBox = null!;
     @property(Node) renameConfirmButton: Node = null!;
     @property(Node) renameCancelButton: Node = null!;
-    @property(Node) renameButton: Node = null!;
-
-    // Tab 切換
-    @property(Node) fashionTabButton: Node = null!;
-    @property(Node) healTabButton: Node = null!;
-    @property(Node) feedTabButton: Node = null!;
-    @property(Node) fashionSection: Node = null!;
-    @property(Node) healSection: Node = null!;
-    @property(Node) feedSection: Node = null!;
 
     // 確認提示視窗
     @property(Node) confirmDialogPanel: Node = null!;
@@ -58,13 +63,21 @@ export class UIManager extends Component {
     @property(Node) confirmDialogYesButton: Node = null!;
     @property(Node) confirmDialogNoButton: Node = null!;
 
-    @property(Label) floatingText: Label = null!;
-
     private currentFishId: number = -1;
     private confirmCallback: Function | null = null;
 
     /** 初始化 */
     start() {
+        SwimmingFish.setEmotionFrames({
+            happy:  this.happySprite,
+            sad:    this.sadSprite,
+            angry:  this.angrySprite,
+            hungry: this.hungrySprite,
+            cold:   this.coldSprite,
+            hot:    this.hotSprite,
+            sick:   this.sickSprite,
+        });
+
         this.closeButton.on(Node.EventType.TOUCH_END, this.closeFishDetail, this);
 
         this.renameButton.on(Node.EventType.TOUCH_END, this.showRenamePanel, this);
@@ -94,7 +107,7 @@ export class UIManager extends Component {
     }
 
     /** 顯示魚詳細資訊 */
-    async showFishDetail(fish: any) {
+    async showFishDetail(fish: FishData, emotionSprite?: SpriteFrame | null) {
         const wasInactive = !this.fishDetailPanel.active;
 
         if (wasInactive) {
@@ -129,17 +142,17 @@ export class UIManager extends Component {
         this.feedBtnNormal.on(Node.EventType.TOUCH_END, this.feedNormal, this);
         this.feedBtnPremium.on(Node.EventType.TOUCH_END, this.feedPremium, this);
 
-        // 情緒圖
-        switch (fish.emotion) {
-            case "happy":
-                this.fishStatusImage.spriteFrame = this.happySprite;
-                break;
-            case "sad":
-                this.fishStatusImage.spriteFrame = this.sadSprite;
-                break;
-            default:
-                this.fishStatusImage.spriteFrame = null!;
+        // 情緒圖：優先用 SwimmingFish 傳來的
+        if (emotionSprite) {
+            this.fishStatusImage.spriteFrame = emotionSprite;
+        } else {
+            const playerData = await DataManager.getPlayerData();
+            const env = playerData.tankEnvironment;
+            const emotion = SwimmingFish.computeEmotion(fish, env);
+            const sf = SwimmingFish.getEmotionSpriteByKey(emotion);
+            this.fishStatusImage.spriteFrame = sf;
         }
+
     }
 
     /** 餵食 */
@@ -327,5 +340,5 @@ export class UIManager extends Component {
         this.confirmDialogPanel.active = true;
         this.confirmCallback = onConfirm;
     }
-
+    
 }
