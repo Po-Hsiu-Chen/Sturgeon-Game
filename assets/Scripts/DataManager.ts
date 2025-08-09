@@ -48,6 +48,7 @@ interface TankEnvironment {
     lastCleanTime: string;                  // 上次清理時間
     isTemperatureDanger: boolean;           // 是否水溫異常（登入後根據時間計算）
     loginDaysSinceClean: number;            // 清缸後累積的登入天數
+    badEnvLoginDays?: number;               // 連續壞環境的登入天數
 }
 
 /** 魚缸 */
@@ -184,6 +185,7 @@ export class DataManager {
                 lastCleanTime: new Date().toISOString(),
                 isTemperatureDanger: false,
                 loginDaysSinceClean: 0,
+                badEnvLoginDays: 0,
             },
             inventory: {
                 feeds: { normal: 666, premium: 66 },

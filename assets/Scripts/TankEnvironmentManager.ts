@@ -48,8 +48,8 @@ export class TankEnvironmentManager {
         }
     }
 
-    /** 是否要感冒（水質或水溫異常） */
-    static shouldCauseCold(playerData: PlayerData): boolean {
+    /** 是否環境異常（水質或水溫異常） */
+    static isEnvBad(playerData: PlayerData): boolean {
         const env = playerData.tankEnvironment;
         return env.isTemperatureDanger || env.waterQualityStatus === "dirty";
     }

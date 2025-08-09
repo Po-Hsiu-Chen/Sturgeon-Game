@@ -145,6 +145,7 @@ export class GameManager extends Component {
 
     /** 處理魚飢餓與成長 */
     async processDailyUpdate() {
+        // 取得資料與時間計算
         const playerData = await DataManager.getPlayerData();
         const now = new Date();
         const today = now.toISOString().split('T')[0];
@@ -155,8 +156,17 @@ export class GameManager extends Component {
         const hoursPassed = (now.getTime() - lastLoginTime.getTime()) / (1000 * 60 * 60);
         const daysPassed = Math.floor((Date.parse(today) - Date.parse(lastLoginDate)) / (1000 * 60 * 60 * 24));
 
+        // 參數設定
         const baseHungerPerHour = 100 / 72; // 基礎飢餓速率
+        const BUFFER_DAYS = 2;              // 壞環境持續天數門檻
+
+        // 暫存變數初始化
         let deadFishNames: string[] = [];
+
+        // 環境病症累積初始化
+        if (env.badEnvLoginDays == null) {
+            env.badEnvLoginDays = 0;
+        }
 
         // 飢餓與成長
         for (const fish of playerData.fishList) {
@@ -209,12 +219,24 @@ export class GameManager extends Component {
         }
         TankEnvironmentManager.checkWaterDirty(playerData);
 
-        // 感冒處理：隨機挑 1 隻感冒
-        if (TankEnvironmentManager.shouldCauseCold(playerData)) {
-            const candidates = playerData.fishList.filter(f => !f.isDead && !f.status.sick);
-            if (candidates.length > 0) {
+        // 處理魚生病
+        if (daysPassed > 0) {
+            // 先依當前環境更新連續壞環境登入天數
+            if (TankEnvironmentManager.isEnvBad(playerData)) {
+                env.badEnvLoginDays += 1;
+            } else {
+                env.badEnvLoginDays = 0; // 環境恢復就重置
+            }
+
+            // 達門檻才讓一隻魚生病
+            if (env.badEnvLoginDays >= BUFFER_DAYS) {
+                const candidates = playerData.fishList.filter(f => !f.isDead && !f.status.sick);
+                if (candidates.length > 0) {
                 const idx = Math.floor(Math.random() * candidates.length);
                 candidates[idx].status.sick = true;
+                console.log(`環境不良已持續 ${env.badEnvLoginDays} 天，${candidates[idx].name} 生病了`);
+                env.badEnvLoginDays = 0;   
+                }
             }
         }
 

@@ -1,5 +1,6 @@
-import { _decorator, Button, Component, EditBox } from 'cc';
+import { _decorator, Button, Component, EditBox, find } from 'cc';
 import { DataManager } from '../DataManager'; // ← 使用你已有的 DataManager
+import { GameManager } from '../GameManager';
 const { ccclass, property } = _decorator;
 
 @ccclass('DevTest')
@@ -102,5 +103,35 @@ export class DevTest extends Component {
         data.tankEnvironment.waterQualityStatus = 'dirty';
         await DataManager.savePlayerData(data);
         console.log('水質已設為髒');
+    }
+
+
+    /** 水質變髒觸發感冒（上次登入改成昨天＋把水質設髒＋累積壞環境一天→ 立刻呼叫 processDailyUpdate */
+    async onSimulateDirtyAndSickToday() {
+        const data = await DataManager.getPlayerData();
+        if (!data) return;
+
+        const env = data.tankEnvironment;
+
+        // 讓水質判定為髒
+        env.waterQualityStatus = 'dirty';
+        env.loginDaysSinceClean = Math.max(1, env.loginDaysSinceClean ?? 0);
+
+        // 讓「連續壞環境登入日」先累積到 1（BUFFER_DAYS=2）
+        env.badEnvLoginDays = 1;
+
+        // 把上次登入時間改成「昨天」，讓今天呼叫 daily update 會 daysPassed=1
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        data.lastLoginDate = yesterday.toISOString().split('T')[0];
+        data.lastLoginTime = yesterday.toISOString();
+
+        await DataManager.savePlayerData(data);
+
+        // 直接觸發你的每日更新流程（會把 badEnvLoginDays += 1 → 達門檻 → 隨機一隻生病）
+        const gm = find('/GameManager')?.getComponent(GameManager);
+        await gm?.processDailyUpdate();
+
+        console.log('今日水質為髒，且依緩衝機制讓一隻魚感冒。');
     }
 }

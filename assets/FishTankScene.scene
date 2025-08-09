@@ -2612,7 +2612,7 @@
     },
     "component": "",
     "_componentId": "fe63dMrY9ZGCr/R8Zz3KSud",
-    "handler": "onSetWaterDirty",
+    "handler": "onSimulateDirtyAndSickToday",
     "customEventData": ""
   },
   {
