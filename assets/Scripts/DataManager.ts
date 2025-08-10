@@ -190,7 +190,7 @@ export class DataManager {
             inventory: {
                 feeds: { normal: 666, premium: 66 },
                 items: {
-                    coldMedicine: 0,
+                    coldMedicine: 10,
                     revivePotion: 10,
                     genderPotion: 10,
                     upgradePotion: 10,

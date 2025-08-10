@@ -30,6 +30,8 @@ export class FishDetailManager extends Component {
     @property(Node) upgradePotionBtn: Node = null!;
     @property(Label) genderPotionCountLabel: Label = null!;
     @property(Label) upgradePotionCountLabel: Label = null!;
+    @property(Node) coldMedicineBtn: Node = null!;
+    @property(Label) coldMedicineCountLabel: Label = null!;
 
     // Feed 相關
     @property(Node) feedSection: Node = null!;
@@ -90,6 +92,7 @@ export class FishDetailManager extends Component {
 
         this.genderPotionBtn.on(Node.EventType.TOUCH_END, this.onUseGenderPotion, this);
         this.upgradePotionBtn.on(Node.EventType.TOUCH_END, this.onUseUpgradePotion, this);
+        this.coldMedicineBtn.on(Node.EventType.TOUCH_END, this.onUseColdMedicine, this);
 
         this.confirmDialogYesButton.on(Node.EventType.TOUCH_END, () => {
             if (this.confirmCallback) {
@@ -135,6 +138,7 @@ export class FishDetailManager extends Component {
         this.feedPremiumCountLabel.string = playerData.inventory.feeds.premium.toString();
         this.genderPotionCountLabel.string = playerData.inventory.items.genderPotion.toString();
         this.upgradePotionCountLabel.string = playerData.inventory.items.upgradePotion.toString();
+        this.coldMedicineCountLabel.string = playerData.inventory.items.coldMedicine.toString();
 
         // 綁定按鈕事件
         this.feedBtnNormal.off(Node.EventType.TOUCH_END);
@@ -142,15 +146,20 @@ export class FishDetailManager extends Component {
         this.feedBtnNormal.on(Node.EventType.TOUCH_END, this.feedNormal, this);
         this.feedBtnPremium.on(Node.EventType.TOUCH_END, this.feedPremium, this);
 
-        // 情緒圖：優先用 SwimmingFish 傳來的
+        // 情緒圖 (優先序：SwimmingFish 傳來的 > 目前心情 > 重新計算)
         if (emotionSprite) {
             this.fishStatusImage.spriteFrame = emotionSprite;
         } else {
-            const playerData = await DataManager.getPlayerData();
-            const env = playerData.tankEnvironment;
-            const emotion = SwimmingFish.computeEmotion(fish, env);
-            const sf = SwimmingFish.getEmotionSpriteByKey(emotion);
-            this.fishStatusImage.spriteFrame = sf;
+            const currentEmotion = fish.emotion as any; 
+            if (currentEmotion) {
+                const sf = SwimmingFish.getEmotionSpriteByKey(currentEmotion);
+                this.fishStatusImage.spriteFrame = sf;
+            } else {
+                const env = playerData.tankEnvironment; 
+                const computed = SwimmingFish.computeEmotion(fish, env);
+                const sf = SwimmingFish.getEmotionSpriteByKey(computed);
+                this.fishStatusImage.spriteFrame = sf;
+            }
         }
 
     }
@@ -263,6 +272,29 @@ export class FishDetailManager extends Component {
             if (gameManager) {
                 gameManager.replaceFishNode(fish);  // 替換模型
             }
+        }
+    }
+
+    /** 道具使用：感冒藥 */
+    onUseColdMedicine() {
+        this.showConfirmDialog("確定要使用感冒藥嗎？", () => this.useColdMedicine());
+    }
+    private async useColdMedicine() {
+        const playerData = await DataManager.getPlayerData();
+        const fish = playerData.fishList.find(f => f.id === this.currentFishId);
+        if (!fish) return;
+
+        const { message, cured } = FishLogic.useColdMedicine(fish, playerData.inventory.items);
+        await DataManager.savePlayerData(playerData);
+        console.log(message);
+
+        if (cured) {
+            const gameManager = this.node.scene.getComponentInChildren(GameManager);
+            if (gameManager) {
+                gameManager.replaceFishNode(fish);
+            }
+            this.showFloatingTextRightOf(this.fishStatusImage.node, '已治癒！');
+            await this.showFishDetail(fish);
         }
     }
 

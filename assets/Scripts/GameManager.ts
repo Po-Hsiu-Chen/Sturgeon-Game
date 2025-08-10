@@ -37,9 +37,6 @@ export class GameManager extends Component {
     @property(Label) fanCountLabel: Label = null!;
     @property(Label) brushCountLabel: Label = null!;
 
-    @property(Node) floatingNode: Node = null!;
-
-
     // 環境效果
     @property(Node) dirtyWaterOverlay: Node = null!;
     @property(Node) coldOverlay: Node = null!;
@@ -49,6 +46,15 @@ export class GameManager extends Component {
     @property minComfortTemp: number = 18; 
     @property maxComfortTemp: number = 23; 
 
+    // 確認提示視窗
+    @property(Node) confirmDialogPanel: Node = null!;
+    @property(Label) confirmDialogText: Label = null!;
+    @property(Node) confirmDialogYesButton: Node = null!;
+    @property(Node) confirmDialogNoButton: Node = null!;
+
+    @property(Node) floatingNode: Node = null!;
+
+    private confirmCallback: Function | null = null;
     private currentTankId: number = 1;
 
     /** 初始化 */
@@ -57,7 +63,21 @@ export class GameManager extends Component {
         await this.processDailyUpdate();       // 更新魚的狀態
 
         this.initButtons();
-        
+        this.confirmDialogYesButton?.on(Node.EventType.TOUCH_END, () => {
+            if (this.confirmCallback) {
+                const cb = this.confirmCallback;
+                this.confirmCallback = null;
+                this.confirmDialogPanel.active = false;
+                cb(); // 執行實際行為
+            } else {
+                this.confirmDialogPanel.active = false;
+            }
+        });
+        this.confirmDialogNoButton?.on(Node.EventType.TOUCH_END, () => {
+            this.confirmCallback = null;
+            this.confirmDialogPanel.active = false;
+        });
+
         await this.switchTank(1);              // 預設顯示主魚缸
         await this.tombManager?.init();
 
@@ -372,20 +392,50 @@ export class GameManager extends Component {
         if (this.brushCountLabel) this.brushCountLabel.string = `${items.brush}`;
 
         // 按鈕能否點擊
-        if (this.heaterBtn) this.heaterBtn.interactable = items.heater > 0;
-        if (this.fanBtn) this.fanBtn.interactable = items.fan > 0;
-        if (this.brushBtn) this.brushBtn.interactable = items.brush > 0;
+        const isTooCold = env.temperature < this.minComfortTemp;
+        const isTooHot  = env.temperature > this.maxComfortTemp;
+
+        if (this.heaterBtn) this.heaterBtn.interactable = items.heater > 0 && isTooCold;
+        if (this.fanBtn)    this.fanBtn.interactable    = items.fan    > 0 && isTooHot;
+        if (this.brushBtn)  this.brushBtn.interactable  = items.brush  > 0; // 刷子不受溫度限制
 
         this.updateEnvironmentOverlays(env);
     }
 
-    /** 使用加熱器 */
+    /** 使用加熱器（點擊） */
     async onClickHeater() {
         const playerData = await DataManager.getPlayerData();
         const items = playerData.inventory.items;
+        const env = playerData.tankEnvironment;
 
         if (items.heater <= 0) {
             this.showFloatingTextCenter('加熱器不足');
+            return;
+        }
+        if (env.temperature >= this.minComfortTemp && env.temperature <= this.maxComfortTemp) {
+            this.showFloatingTextCenter('目前水溫正常，無需使用加熱器');
+            return;
+        }
+        if (env.temperature > this.maxComfortTemp) {
+            this.showFloatingTextCenter('目前為高溫狀態，請使用風扇');
+            return;
+        }
+        this.showConfirmDialog('確定要使用加熱器嗎？', () => this.useHeater());
+    }
+
+    /** 真正執行加熱器 */
+    private async useHeater() {
+        const playerData = await DataManager.getPlayerData();
+        const items = playerData.inventory.items;
+        const env = playerData.tankEnvironment;
+
+        if (items.heater <= 0) {
+            this.showFloatingTextCenter('加熱器不足');
+            return;
+        }
+        // 再次保險檢查
+        if (env.temperature >= this.minComfortTemp) {
+            this.showFloatingTextCenter('目前水溫不低，不需使用加熱器');
             return;
         }
 
@@ -394,15 +444,43 @@ export class GameManager extends Component {
 
         await DataManager.savePlayerData(playerData);
         await this.refreshEnvironmentUI();
+        this.showFloatingTextCenter('已使用加熱器');
     }
 
-    /** 使用風扇 */
+    /** 使用風扇（點擊） */
     async onClickFan() {
         const playerData = await DataManager.getPlayerData();
         const items = playerData.inventory.items;
+        const env = playerData.tankEnvironment;
 
         if (items.fan <= 0) {
             this.showFloatingTextCenter('風扇不足');
+            return;
+        }
+        if (env.temperature >= this.minComfortTemp && env.temperature <= this.maxComfortTemp) {
+            this.showFloatingTextCenter('目前水溫正常，無需使用風扇');
+            return;
+        }
+        if (env.temperature < this.minComfortTemp) {
+            this.showFloatingTextCenter('目前為低溫狀態，請使用加熱器');
+            return;
+        }
+        this.showConfirmDialog('確定要使用風扇嗎？', () => this.useFan());
+    }
+
+    /** 真正執行風扇 */
+    private async useFan() {
+        const playerData = await DataManager.getPlayerData();
+        const items = playerData.inventory.items;
+        const env = playerData.tankEnvironment;
+
+        if (items.fan <= 0) {
+            this.showFloatingTextCenter('風扇不足');
+            return;
+        }
+        // 再次保險檢查
+        if (env.temperature <= this.maxComfortTemp) {
+            this.showFloatingTextCenter('目前水溫不高，不需使用風扇');
             return;
         }
 
@@ -411,10 +489,23 @@ export class GameManager extends Component {
 
         await DataManager.savePlayerData(playerData);
         await this.refreshEnvironmentUI();
+        this.showFloatingTextCenter('已使用風扇');
     }
 
-    /** 使用魚缸刷 */
+    /** 使用魚缸刷（點擊） */
     async onClickBrush() {
+        const playerData = await DataManager.getPlayerData();
+        const items = playerData.inventory.items;
+
+        if (items.brush <= 0) {
+            this.showFloatingTextCenter('魚缸刷不足');
+            return;
+        }
+        this.showConfirmDialog('確定要使用魚缸刷嗎？', () => this.useBrush());
+    }
+
+    /** 真正執行魚缸刷 */
+    private async useBrush() {
         const playerData = await DataManager.getPlayerData();
         const items = playerData.inventory.items;
 
@@ -428,6 +519,7 @@ export class GameManager extends Component {
 
         await DataManager.savePlayerData(playerData);
         await this.refreshEnvironmentUI();
+        this.showFloatingTextCenter('已清潔魚缸');
     }
 
     private updateEnvironmentOverlays(env: any) {
@@ -477,4 +569,10 @@ export class GameManager extends Component {
             .start();
     }
 
+    private showConfirmDialog(message: string, onConfirm: Function) {
+        if (!this.confirmDialogPanel || !this.confirmDialogText) return;
+        this.confirmDialogText.string = message;
+        this.confirmCallback = onConfirm;
+        this.confirmDialogPanel.active = true;
+    }
 }

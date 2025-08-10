@@ -60,6 +60,30 @@ export class FishLogic {
         return `${fish.name} 的性別已變更為 ${fish.gender === 'male' ? '公' : '母'}`;
     }
 
+    static useColdMedicine(fish: any, items: any): { message: string; cured: boolean } {
+        if (items.coldMedicine <= 0) {
+            return { message: '沒有感冒藥了', cured: false };
+        }
+        if (fish.isDead) {
+            return { message: '魚已死亡，不能使用感冒藥', cured: false };
+        }
+
+        // 保險：status 可能還沒建立
+        if (!fish.status) {
+            fish.status = { sick: false };
+        }
+
+        if (!fish.status.sick) {
+            return { message: `${fish.name} 並沒有生病`, cured: false };
+        }
+
+        items.coldMedicine -= 1;
+        fish.status.sick = false;
+        fish.emotion = 'happy'; // sick -> happy（UI 立即更新）
+
+        return { message: `${fish.name} 已治癒`, cured: true };
+    }
+
     static tryStageUpgradeByGrowthDays(fish: any): boolean {
         const thresholds: Record<number, number> = {
             1: 0,
