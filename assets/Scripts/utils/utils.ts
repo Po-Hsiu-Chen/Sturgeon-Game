@@ -13,14 +13,18 @@ export function getRandomItem<T>(array: T[]): T {
     return array[Math.floor(Math.random() * array.length)];
 }
 
-/** 計算今年第幾週 */
-export function getCurrentWeekIndex(): number {
-    const now = new Date();
-    const firstThursday = new Date(now.getFullYear(), 0, 1);
-    // 找到第一個週四（ISO 週從包含週四的週一開始）
-    while (firstThursday.getDay() !== 4) {
-        firstThursday.setDate(firstThursday.getDate() + 1);
-    }
-    const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-    return Math.floor((now.getTime() - firstThursday.getTime()) / msPerWeek) + 1;
+/** 取得今天是週幾（週一 = 0） */
+export function getTodayIndex(): number {
+    //const day = 6; // 測試用
+    const day = new Date().getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    return (day + 6) % 7; // 轉換為 Mon=0, ..., Sun=6
+}
+
+/** 計算本週一 */
+export function getWeekStartKey(date = new Date(), tzOffsetMinutes = 480): string {
+    const shifted = new Date(date.getTime() + tzOffsetMinutes * 60_000);
+    const d = new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate()));
+    const dow = (d.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+    d.setUTCDate(d.getUTCDate() - dow);  // 回到本週一
+    return d.toISOString().slice(0, 10); // "YYYY-MM-DD"
 }

@@ -1,6 +1,6 @@
 import { _decorator, Component, Node } from 'cc';
 import { quizQuestions } from './quiz/QuizData';
-import { getCurrentWeekIndex } from './utils/utils';
+import { getWeekStartKey } from './utils/utils';
 const { ccclass, property } = _decorator;
 
 // -------- 資料結構定義 --------
@@ -89,7 +89,7 @@ export interface PlayerData {
     };
     signInData: {
         weekly: {
-            weekIndex: number;             // 當前第幾週（用來重置）
+            weekKey: number;               // 該週星期一
             daysSigned: boolean[];         // 一週 7 天簽到紀錄
             questionsCorrect: boolean[];   // 是否答對紀錄
             lastSignDate: string;          // 最後簽到日期
@@ -202,9 +202,8 @@ export class DataManager {
             fashion: { owned: [] },
             signInData: {
                 weekly: {
-                    //weekIndex: 29, // 測試用
                     //daysSigned: [false, false, false, false, false, false, true], // 測試用
-                    weekIndex: getCurrentWeekIndex(),
+                    weekKey: getWeekStartKey(),
                     daysSigned: [false, false, false, false, false, false, false],
                     questionsCorrect: [false, false, false, false, false, false, false],
                     lastSignDate: ""

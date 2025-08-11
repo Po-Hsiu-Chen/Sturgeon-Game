@@ -2,7 +2,7 @@ import { _decorator, Component, Node, Sprite, Color, Label, Button, sys, Prefab,
 import { DataManager } from '../DataManager';
 import { RewardPopup } from '../RewardPopup';
 import { QuizPanel } from '../quiz/QuizPanel';
-import { getRandomItem, getCurrentWeekIndex, shuffleArray } from '../utils/utils';
+import { getRandomItem, getTodayIndex, getWeekStartKey } from '../utils/utils';
 const { ccclass, property } = _decorator;
 
 enum DayStatus {
@@ -39,7 +39,7 @@ export class WeeklySignInManager extends Component {
         await DataManager.ensureInitialized(); // 確保資料存在
         this.playerData = await DataManager.getPlayerData(); // 讀資料
         this.handleWeekReset();
-        this.todayIndex = this.getTodayIndex();
+        this.todayIndex = getTodayIndex();
         this.updateSignInUI();
         this.claimButton.node.on('click', this.onClaimButtonClick, this);
 
@@ -56,28 +56,22 @@ export class WeeklySignInManager extends Component {
 
     }
 
-    /** 取得今天是週幾（週一 = 0） */
-    getTodayIndex(): number {
-        //const day = 6; // 測試用
-        const day = new Date().getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-        return (day + 6) % 7; // 轉換為 Mon=0, ..., Sun=6
-    }
-
     /** 判斷當週是否要重置簽到狀態 */
     handleWeekReset() {
-        const currentWeek = getCurrentWeekIndex();
-        const storedWeek = this.playerData.signInData.weekly.weekIndex;
+        const currentWeekKey = getWeekStartKey(); 
+        const weekly = this.playerData.signInData.weekly || {};
+        const storedWeekKey: string | undefined = weekly.weekKey;
 
-        console.log("本週週數 =", currentWeek);
-        console.log("玩家資料週數 =", storedWeek);
+        console.log("本週週鍵 =", currentWeekKey);
+        console.log("玩家資料週鍵 =", storedWeekKey);
 
-        if (currentWeek !== storedWeek) {
+        if (storedWeekKey !== currentWeekKey) {
             console.log('新的一週開始，重置週簽到資料');
             this.playerData.signInData.weekly = {
-                weekIndex: currentWeek,
+                weekKey: currentWeekKey, // 用週一日期當鍵
                 daysSigned: [false, false, false, false, false, false, false],
                 questionsCorrect: [false, false, false, false, false, false, false],
-                lastSignDate: ''
+                lastSignDate: '' 
             };
             this.savePlayerData();
         }
@@ -155,7 +149,6 @@ export class WeeklySignInManager extends Component {
             return;
         }
 
-
         // 這裡你要接 UI 顯示，暫時用 console 模擬
         const questions = await DataManager.getQuizQuestions();
         const randomQuestion = getRandomItem(questions);
@@ -165,13 +158,6 @@ export class WeeklySignInManager extends Component {
 
         const quiz = quizNode.getComponent(QuizPanel);
         const isCorrect = await quiz.setup(randomQuestion);
-
-        // 根據答對與否處理簽到
-        if (isCorrect) {
-            console.log("答對了！給雙倍獎勵");
-        } else {
-            console.log("答錯了！給基本獎勵");
-        }
 
         // 更新資料
         this.playerData.signInData.weekly.lastSignDate = today;
