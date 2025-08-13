@@ -496,11 +496,17 @@ export class GameManager extends Component {
     async onClickBrush() {
         const playerData = await DataManager.getPlayerData();
         const items = playerData.inventory.items;
+        const env = playerData.tankEnvironment;
 
         if (items.brush <= 0) {
             this.showFloatingTextCenter('魚缸刷不足');
             return;
         }
+        if (env.waterQualityStatus = "clean") {
+            this.showFloatingTextCenter('目前魚缸很乾淨，無需使用魚缸刷');
+            return;
+        }
+
         this.showConfirmDialog('確定要使用魚缸刷嗎？', () => this.useBrush());
     }
 
@@ -513,7 +519,6 @@ export class GameManager extends Component {
             this.showFloatingTextCenter('魚缸刷不足');
             return;
         }
-
         items.brush -= 1;
         TankEnvironmentManager.cleanWater(playerData);
 

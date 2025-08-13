@@ -175,13 +175,19 @@ export class FishDetailManager extends Component {
         const playerData = await DataManager.getPlayerData();
         const fish = playerData.fishList.find(f => f.id === this.currentFishId);
         if (!fish) return;
+        
+        // 飢餓值為 0：禁止餵食
+        if (fish.hunger <= 0) {
+            this.showFloatingTextRightOf(this.hungerLabel.node, '已飽，無需餵食');
+            return;
+        }
 
         const msg = FishLogic.feed(fish, playerData.inventory, amount, type);
         console.log(msg);
         await DataManager.savePlayerData(playerData);
         this.showFishDetail(fish);
 
-        this.showFloatingTextRightOf(this.hungerLabel.node, `餵食 +${amount}`);
+        this.showFloatingTextRightOf(this.hungerLabel.node, `餵食 -${amount}`);
     }
 
     /** 重新命名 */

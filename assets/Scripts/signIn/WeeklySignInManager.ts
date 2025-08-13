@@ -2,6 +2,7 @@ import { _decorator, Component, Node, Sprite, Color, Label, Button, sys, Prefab,
 import { DataManager } from '../DataManager';
 import { RewardPopup } from '../RewardPopup';
 import { QuizPanel } from '../quiz/QuizPanel';
+import { SignInPanel } from './SignInPanel';
 import { getRandomItem, getTodayIndex, getWeekStartKey } from '../utils/utils';
 const { ccclass, property } = _decorator;
 
@@ -15,7 +16,9 @@ enum DayStatus {
 @ccclass('WeeklySignInManager')
 export class WeeklySignInManager extends Component {
 
-    // 簽到格子
+    @property(SignInPanel) signInPanel: SignInPanel = null!;
+
+    // 7 簽到格子
     @property(Sprite) dayBgSprites: Sprite[] = [];
     @property(Label) dayLabels: Label[] = [];
 
@@ -53,7 +56,6 @@ export class WeeklySignInManager extends Component {
             this.claimButton.interactable = true; // 啟用按鈕
             this.signInHintLabel.string = "答題簽到";
         }
-
     }
 
     /** 判斷當週是否要重置簽到狀態 */
@@ -82,14 +84,13 @@ export class WeeklySignInManager extends Component {
         await DataManager.savePlayerData(this.playerData);
     }
 
-    /** 更新 UI */
+    /** 更新 7 格簽到 UI（顏色與文字 */
     updateSignInUI() {
         for (let i = 0; i < this.dayBgSprites.length; i++) {
             const sprite = this.dayBgSprites[i];
             const label = this.dayLabels[i];
 
             let status: DayStatus;
-
             if (this.playerData.signInData.weekly.daysSigned[i]) {
                 status = DayStatus.Signed;
             } else if (i === this.todayIndex) {
@@ -99,10 +100,8 @@ export class WeeklySignInManager extends Component {
             } else {
                 status = DayStatus.Future;
             }
-
             this.applyStyle(sprite, label, status);
         }
-
     }
 
     applyStyle(sprite: Sprite | null, label: Label | null, status: DayStatus) {
@@ -126,20 +125,16 @@ export class WeeklySignInManager extends Component {
         }
     }
 
-    getIconSpriteFrame(key: string): SpriteFrame {
-        // 根據 key 傳出對應 SpriteFrame
-        // 你可以自己用 SpriteAtlas 或一張張圖做對應
+    /** 依 key 取得 icon */
+    private getIconSpriteFrame(key: string): SpriteFrame {
         switch (key) {
-            case 'dragonbone':
-                return this.dragonBoneSpriteFrame;
-            case 'premium_feed':
-                return this.premiumFeedSpriteFrame;
-            default:
-                return this.defaultSpriteFrame;
+            case 'dragonbone': return this.dragonBoneSpriteFrame;
+            case 'premium_feed': return this.premiumFeedSpriteFrame;
+            default: return this.defaultSpriteFrame;
         }
     }
 
-    /** 處理簽到按鈕點擊（含答題邏輯） */
+    /** 週簽到按鈕 → 題目 → 計算獎勵 → 儲存 → 切到月簽到 */
     async onClaimButtonClick() {
         const today = new Date().toISOString().split('T')[0];
         const lastSign = this.playerData.signInData.weekly.lastSignDate;
@@ -149,17 +144,15 @@ export class WeeklySignInManager extends Component {
             return;
         }
 
-        // 這裡你要接 UI 顯示，暫時用 console 模擬
+        // 顯示答題（隨機一題）
         const questions = await DataManager.getQuizQuestions();
         const randomQuestion = getRandomItem(questions);
-
         const quizNode = instantiate(this.quizPanelPrefab);
         this.node.parent.addChild(quizNode);
-
         const quiz = quizNode.getComponent(QuizPanel);
         const isCorrect = await quiz.setup(randomQuestion);
 
-        // 更新資料
+        // 寫入週簽到結果
         this.playerData.signInData.weekly.lastSignDate = today;
         this.playerData.signInData.weekly.daysSigned[this.todayIndex] = true;
 
@@ -168,17 +161,16 @@ export class WeeklySignInManager extends Component {
         let finalReward = isCorrect ? baseReward * 2 : baseReward;
         this.playerData.dragonBones += finalReward;
 
+        // 第 7 天（index=6）額外給高級飼料
         if (this.todayIndex === 6) {
-            // 第七天：送高級飼料
             this.playerData.inventory.feeds.premium += 1;
             console.log("今日為第七天，發送一包高級飼料！");
         }
         
-        // 建立要顯示的獎勵資料
+        // 彈窗顯示獎勵
         const rewards = [
             { icon: this.getIconSpriteFrame('dragonbone'), name: '龍骨', count: finalReward }
         ];
-
         if (this.todayIndex === 6) {
             rewards.push({
                 icon: this.getIconSpriteFrame('premium_feed'),
@@ -186,30 +178,16 @@ export class WeeklySignInManager extends Component {
                 count: 1
             });
         }
-
-        // 顯示獎勵彈窗動畫
         const popup = instantiate(this.rewardPopupPrefab);
         popup.getComponent(RewardPopup).showRewards(rewards);
         this.node.getComponent(UITransform).node.parent!.addChild(popup);
 
-
-        // 月簽到：累積一天
-        const now = new Date();
-        const thisMonth = now.getMonth() + 1;
-        const thisYear = now.getFullYear();
-        const monthly = this.playerData.signInData.monthly;
-
-        if (monthly.month !== thisMonth || monthly.year !== thisYear) {
-            monthly.month = thisMonth;
-            monthly.year = thisYear;
-            monthly.signedDaysCount = 1;
-        } else if (monthly.signedDaysCount < 28) {
-            monthly.signedDaysCount++;
-        }
-
-        this.savePlayerData();
+        // 儲存 + 更新 UI + 鎖按鈕
+        await this.savePlayerData();
         this.updateSignInUI();
-
         this.claimButton.interactable = false;
+
+        // 切換至月簽到
+        this.signInPanel?.onWeeklySignInDone();
     }
 }

@@ -11,7 +11,7 @@
     "6c48a": {
       "importer": "texture",
       "uuid": "21d913ec-5ecd-4a9e-8eae-48e8a3d18897@6c48a",
-      "displayName": "big_fish.PNG",
+      "displayName": "big_fish",
       "id": "6c48a",
       "name": "texture",
       "userData": {
@@ -35,7 +35,7 @@
     "f9941": {
       "importer": "sprite-frame",
       "uuid": "21d913ec-5ecd-4a9e-8eae-48e8a3d18897@f9941",
-      "displayName": "big_fish.PNG",
+      "displayName": "big_fish",
       "id": "f9941",
       "name": "spriteFrame",
       "userData": {

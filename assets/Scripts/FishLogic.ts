@@ -87,11 +87,11 @@ export class FishLogic {
     static tryStageUpgradeByGrowthDays(fish: any): boolean {
         const thresholds: Record<number, number> = {
             1: 0,
-            2: 10,
-            3: 30,
-            4: 70,
-            5: 120,
-            6: 180,
+            2: 5,
+            3: 15,
+            4: 35,
+            5: 60,
+            6: 90,
         };
 
         let upgraded = false;

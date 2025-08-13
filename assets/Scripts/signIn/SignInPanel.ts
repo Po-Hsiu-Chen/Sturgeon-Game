@@ -4,62 +4,68 @@ const { ccclass, property } = _decorator;
 
 @ccclass('SignInPanel')
 export class SignInPanel extends Component {
-    @property(Node)
-    weeklyPanel: Node = null;
+    // 兩個子面板
+    @property(Node) weeklyPanel: Node = null!;
+    @property(Node) monthlyPanel: Node = null!;
 
-    @property(Node)
-    monthlyPanel: Node = null;
+    // 分頁按鈕
+    @property(Button) weeklyTabBtn: Button = null!;
+    @property(Button) monthlyTabBtn: Button = null!;
 
-    @property(Button)
-    weeklyTabBtn: Button = null;
-
-    @property(Button)
-    monthlyTabBtn: Button = null;
-
-    @property(Button)
-    closeBtn: Button = null;
+    // 關閉按鈕
+    @property(Button) closeBtn: Button = null!;
 
     async onLoad() {
-        this.weeklyTabBtn.node.on(Button.EventType.CLICK, this.showWeekly, this);
-        this.monthlyTabBtn.node.on(Button.EventType.CLICK, this.showMonthly, this);
-        this.closeBtn.node.on(Button.EventType.CLICK, this.closePanel, this);
+        // 綁定按鈕事件
+        this.weeklyTabBtn?.node.on(Button.EventType.CLICK, this.showWeekly, this);
+        this.monthlyTabBtn?.node.on(Button.EventType.CLICK, this.showMonthly, this);
+        this.closeBtn?.node.on(Button.EventType.CLICK, this.closePanel, this);
 
-        this.showWeekly(); // 預設顯示週簽到
+        // 預設顯示週簽到
+        this.showWeekly();
 
-        // 判斷今天是否需要顯示面板
+        // 依今日簽到狀態決定是否顯示面板與預設頁籤
         await this.checkIfShouldShow();
     }
 
+    /** 依據今日的簽到狀態，決定是否顯示面板與預設頁籤 */
     async checkIfShouldShow() {
         await DataManager.ensureInitialized();
         const playerData = await DataManager.getPlayerData();
         const today = new Date().toISOString().split('T')[0];
 
         const weeklySigned = playerData.signInData.weekly?.lastSignDate === today;
+        const monthlySigned = playerData.signInData.monthly?.lastSignDate === today;
 
         if (!weeklySigned) {
             this.node.active = true;
-            console.log("[簽到面板] 今日尚未簽到，打開面板 (週簽到為基準)");
+            this.showWeekly();
+            console.log('[簽到面板] 今日週尚未簽到 -> 顯示週簽到');
+        } else if (!monthlySigned) {
+            this.node.active = true;
+            this.showMonthly();
+            console.log('[簽到面板] 今日週已簽到但月未簽到 -> 自動切到月簽到');
         } else {
             this.node.active = false;
-            console.log("[簽到面板] 今日已簽到，關閉面板 (週簽到為基準)");
+            console.log('[簽到面板] 週與月皆已簽到 -> 關閉面板');
         }
     }
 
+    /** 顯示週簽到 */
     showWeekly() {
         this.weeklyPanel.active = true;
         this.monthlyPanel.active = false;
-
         this.updateTabVisual();
     }
 
+    /** 顯示月簽到 */
     showMonthly() {
         this.weeklyPanel.active = false;
         this.monthlyPanel.active = true;
-
         this.updateTabVisual();
     }
 
+    /** 更新分頁按鈕的顏色（白=選中、灰=未選） */
     updateTabVisual() {
         const weeklySprite = this.weeklyTabBtn.node.getComponent(Sprite);
         const monthlySprite = this.monthlyTabBtn.node.getComponent(Sprite);
@@ -76,14 +82,26 @@ export class SignInPanel extends Component {
         }
     }
 
+    /** 關閉面板 */
     closePanel() {
         this.node.active = false;
     }
 
+    /** 手動開啟（預設切到週） */
     openPanel() {
         this.node.active = true;
         this.showWeekly();  // 預設顯示週簽到
-        console.log("[簽到面板] 手動開啟");
+        console.log('[簽到面板] 手動開啟');
     }
 
+
+    public async onWeeklySignInDone() {
+        try {
+            await DataManager.ensureInitialized(); // 如需確保資料已寫入
+            this.showMonthly();
+            console.log('[簽到面板] 週簽到完成 -> 自動切換到月簽到');
+        } catch (e) {
+            console.warn('[簽到面板] 週簽到完成後切換月簽到失敗：', e);
+        }
+    }
 }

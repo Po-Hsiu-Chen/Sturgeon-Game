@@ -98,6 +98,7 @@ export interface PlayerData {
             month: number;                 // 月份（1~12）
             year: number;                  // 年（跨年重置）
             signedDaysCount: number;       // 當月已簽到幾天
+            lastSignDate: string;          // 最後簽到日期
         }
     };
 
@@ -150,7 +151,7 @@ export class DataManager {
                 // stage: 1,
                 // growthDaysPassed: 0,
                 stage: 2, // 測試用
-                growthDaysPassed: 25, // 測試用
+                growthDaysPassed: 14, // 測試用
                 lastFedDate: new Date().toISOString(),
                 hunger: 33,
                 hungerRateMultiplier: 1.0,
@@ -211,7 +212,8 @@ export class DataManager {
                 monthly: {
                     month: new Date().getMonth() + 1,
                     year: new Date().getFullYear(),
-                    signedDaysCount: 2
+                    signedDaysCount: 2,
+                    lastSignDate: ""
                 }
             }
         };
