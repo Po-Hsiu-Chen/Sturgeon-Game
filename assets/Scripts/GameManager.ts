@@ -9,60 +9,90 @@ const { ccclass, property } = _decorator;
 @ccclass('GameManager')
 export class GameManager extends Component {
 
-    @property(Node) fishArea: Node = null!;  // 魚可以活動的區域
-    @property([Prefab]) maleFishPrefabsByStage: Prefab[] = [];  // 公魚：第1~6階
-    @property([Prefab]) femaleFishPrefabsByStage: Prefab[] = [];  // 母魚：第1~6階
-    @property(Node) signInPanel: Node = null!; // 簽到面板
-    @property([Button]) tankButtons: Button[] = [];
-    @property(Button) tombTankBtn: Button = null!;
-    @property([Node]) tankNodes: Node[] = [];
-    @property(Node) tombTankNode: Node = null!;
     @property(TombManager) tombManager: TombManager = null!;
 
-    @property(Node) deathNoticePanel: Node = null!;
-    @property(Label) deathNoticeLabel: Label = null!;
-    @property(Button) deathNoticeCloseBtn: Button = null!;
+    // 魚缸與魚類
+    @property(Node) fishArea: Node = null!;                     // 魚活動區域
+    @property([Prefab]) maleFishPrefabsByStage: Prefab[] = [];  // 公魚：第 1~6 階
+    @property([Prefab]) femaleFishPrefabsByStage: Prefab[] = [];// 母魚：第 1~6 階
+    @property([Button]) tankButtons: Button[] = [];             // 魚缸按鈕
+    @property(Button) tombTankBtn: Button = null!;              // 墓地魚缸按鈕
+    @property([Node]) tankNodes: Node[] = [];                   // 魚缸節點
+    @property(Node) tombTankNode: Node = null!;                 // 墓地魚缸節點
+
+    // 簽到面板
+    @property(Node) signInPanel: Node = null!;  
 
     // 環境資訊
-    @property(Label) temperatureLabel: Label = null!;
-    @property(Label) waterQualityLabel: Label = null!;
+    @property(Label) temperatureLabel: Label = null!;           // 溫度顯示
+    @property(Label) waterQualityLabel: Label = null!;          // 水質顯示
+    @property minComfortTemp: number = 18;                      // 最低舒適溫度
+    @property maxComfortTemp: number = 23;                      // 最高舒適溫度
 
-    // 道具按鈕
-    @property(Button) heaterBtn: Button = null!;
-    @property(Button) fanBtn: Button = null!;
-    @property(Button) brushBtn: Button = null!;
-
-    // 道具數量顯示
-    @property(Label) heaterCountLabel: Label = null!;
-    @property(Label) fanCountLabel: Label = null!;
-    @property(Label) brushCountLabel: Label = null!;
+    // 道具
+    @property(Button) heaterBtn: Button = null!;                 // 加熱器按鈕
+    @property(Button) fanBtn: Button = null!;                    // 風扇按鈕
+    @property(Button) brushBtn: Button = null!;                  // 魚缸刷按鈕
+    @property(Label) heaterCountLabel: Label = null!;            // 加熱器數量
+    @property(Label) fanCountLabel: Label = null!;               // 風扇數量
+    @property(Label) brushCountLabel: Label = null!;             // 魚缸刷數量
 
     // 環境效果
-    @property(Node) dirtyWaterOverlay: Node = null!;
-    @property(Node) coldOverlay: Node = null!;
-    @property(Node) hotOverlay: Node = null!;  
+    @property(Node) dirtyWaterOverlay: Node = null!;             // 髒
+    @property(Node) coldOverlay: Node = null!;                   // 冷
+    @property(Node) hotOverlay: Node = null!;                    // 熱
 
-    // 溫度區間
-    @property minComfortTemp: number = 18; 
-    @property maxComfortTemp: number = 23; 
+    // 確認面板
+    @property(Node) confirmDialogPanel: Node = null!;            // 確認提示面板
+    @property(Label) confirmDialogText: Label = null!;           // 提示文字
+    @property(Node) confirmDialogYesButton: Node = null!;        // 是按鈕
+    @property(Node) confirmDialogNoButton: Node = null!;         // 否按鈕
 
-    // 確認提示視窗
-    @property(Node) confirmDialogPanel: Node = null!;
-    @property(Label) confirmDialogText: Label = null!;
-    @property(Node) confirmDialogYesButton: Node = null!;
-    @property(Node) confirmDialogNoButton: Node = null!;
+    // 提示面板
+    @property(Node) deathNoticePanel: Node = null!;             // 死亡通知面板
+    @property(Label) deathNoticeLabel: Label = null!;           // 死亡通知文字
+    @property(Button) deathNoticeCloseBtn: Button = null!;      // 死亡通知關閉按鈕
+    @property(Node) tombHintPanel: Node = null!;                // 墓地提示面板
+    @property(Button) tombHintCloseBtn: Button = null!;         // 墓地提示關閉按鈕
 
-    @property(Node) floatingNode: Node = null!;
+    @property(Node) floatingNode: Node = null!;                
 
-    private confirmCallback: Function | null = null;
-    private currentTankId: number = 1;
+    private confirmCallback: Function | null = null;         // 確認回調
+    private currentTankId: number = 1;                       // 當前魚缸 ID
 
     /** 初始化 */
     async start() {
-        await DataManager.ensureInitialized(); // 初始化資料
-        await this.processDailyUpdate();       // 更新魚的狀態
+        await DataManager.ensureInitialized();
+        await this.processDailyUpdate();
 
         this.initButtons();
+        this.initDialogs();
+        this.initPanels();
+
+        await this.switchTank(1);   // 預設顯示主魚缸
+        await this.tombManager?.init();
+        await this.refreshEnvironmentUI();
+    }
+
+    /** 初始化所有按鈕事件 */
+    initButtons() {
+        // 魚缸切換按鈕
+        this.tankButtons.forEach((btn, index) => {
+            btn.node.on(Node.EventType.TOUCH_END, () => this.switchTank(index + 1));
+        });
+
+        // 墓園魚缸
+        this.tombTankBtn.node.on(Node.EventType.TOUCH_END, () => this.switchToTombTank());
+
+        // 道具按鈕
+        this.heaterBtn?.node.on(Node.EventType.TOUCH_END, () => this.onClickHeater());
+        this.fanBtn?.node.on(Node.EventType.TOUCH_END, () => this.onClickFan());
+        this.brushBtn?.node.on(Node.EventType.TOUCH_END, () => this.onClickBrush());
+    }
+
+    /** 初始化對話框事件 */
+    initDialogs() {
+        // 確認視窗
         this.confirmDialogYesButton?.on(Node.EventType.TOUCH_END, () => {
             if (this.confirmCallback) {
                 const cb = this.confirmCallback;
@@ -73,38 +103,30 @@ export class GameManager extends Component {
                 this.confirmDialogPanel.active = false;
             }
         });
+
         this.confirmDialogNoButton?.on(Node.EventType.TOUCH_END, () => {
             this.confirmCallback = null;
             this.confirmDialogPanel.active = false;
         });
-
-        await this.switchTank(1);              // 預設顯示主魚缸
-        await this.tombManager?.init();
-
-        if (this.signInPanel) {
-            this.signInPanel.active = true;    // 預設打開簽到面板
-        } 
-        this.deathNoticeCloseBtn.node.on(Node.EventType.TOUCH_END, () => {
-            this.deathNoticePanel.active = false;
-        });
-
-        await this.refreshEnvironmentUI();
     }
 
-    initButtons() {
-        this.tankButtons.forEach((btn, index) => {
-            btn.node.on(Node.EventType.TOUCH_END, () => {
-                this.switchTank(index + 1);
-            });
+    /** 初始化面板事件與狀態 */
+    initPanels() {
+        // 簽到面板
+        if (this.signInPanel) {
+            this.signInPanel.active = true;
+        }
+
+        // 死亡提示面板
+        this.deathNoticeCloseBtn.node.on(Node.EventType.TOUCH_END, () => {
+            this.deathNoticePanel.active = false;
+            this.tombHintPanel.active = true;
         });
 
-        this.tombTankBtn.node.on(Node.EventType.TOUCH_END, () => {
-            this.switchToTombTank();
+        // 墓園提示面板
+        this.tombHintCloseBtn.node.on(Node.EventType.TOUCH_END, () => {
+            this.tombHintPanel.active = false;
         });
-
-        this.heaterBtn?.node.on(Node.EventType.TOUCH_END, () => this.onClickHeater());
-        this.fanBtn?.node.on(Node.EventType.TOUCH_END, () => this.onClickFan());
-        this.brushBtn?.node.on(Node.EventType.TOUCH_END, () => this.onClickBrush());
     }
 
     async switchTank(tankId: number) {
