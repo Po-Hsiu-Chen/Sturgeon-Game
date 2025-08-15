@@ -50,7 +50,7 @@ export class SwimmingFish extends Component {
         const iconNode = this.emotionBubble?.getChildByName('EmotionIcon');
         this.emotionSprite = iconNode?.getChildByName('Sprite')?.getComponent(Sprite) || null;
         if (!this.emotionSprite) {
-        console.warn(`[SwimmingFish] 找不到 EmotionBubble 內的 Sprite，請確認泡泡底下有 Sprite 元件`);
+            console.warn(`[SwimmingFish] 找不到 EmotionBubble 內的 Sprite，請確認泡泡底下有 Sprite 元件`);
         }
 
         const magnifierBtn = this.emotionBubble?.getChildByName("MagnifierBtn");
@@ -87,28 +87,36 @@ export class SwimmingFish extends Component {
     }
 
     async onClickFish() {
+        console.log("onClickFish");
         if (!this.emotionBubble) return;
 
-        // 若這隻就是目前選中的魚，則關閉泡泡
+        // 同一條：改成關閉
         if (SwimmingFish.currentSelectedFish === this) {
             this.emotionBubble.active = false;
             SwimmingFish.currentSelectedFish = null;
-        } else {
-            // 關掉前一隻魚的泡泡
-            if (SwimmingFish.currentSelectedFish) {
-                SwimmingFish.currentSelectedFish.emotionBubble!.active = false;
-            }
-
-            // 顯示新的泡泡並設定選中魚
-            this.emotionBubble.active = true;
-            await this.updateBubbleEmotionIcon();
-            this.emotionBubble.setScale(new Vec3(0.3, 0.3, 1)); 
-            tween(this.emotionBubble)
-                .to(0.25, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' })
-                .start();
-            SwimmingFish.currentSelectedFish = this;
+            return;
         }
+
+        // 關掉前一條
+        if (SwimmingFish.currentSelectedFish) {
+            SwimmingFish.currentSelectedFish.emotionBubble!.active = false;
+        }
+
+        // 先標記這條為選取，避免 update() 把泡泡關掉
+        SwimmingFish.currentSelectedFish = this;
+
+        // 再開泡泡與動畫
+        this.emotionBubble.active = true;
+        this.emotionBubble.setScale(new Vec3(0.3, 0.3, 1));
+
+        // 這裡即使 await，update() 也不會把它關掉了
+        await this.updateBubbleEmotionIcon();
+
+        tween(this.emotionBubble)
+            .to(0.25, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' })
+            .start();
     }
+
 
     static clearSelection() {
         if (SwimmingFish.currentSelectedFish) {

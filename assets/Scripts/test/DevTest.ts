@@ -25,6 +25,7 @@ export class DevTest extends Component {
             return;
         }
 
+        await DataManager.ready?.catch(()=>{});
         const data = await DataManager.getPlayerData();
         if (!data) return;
 
@@ -41,6 +42,7 @@ export class DevTest extends Component {
 
     /** 印出目前魚的簡要摘要 */
     async onPrintSummary() {
+        await DataManager.ready?.catch(()=>{});
         const data = await DataManager.getPlayerData();
         if (!data) {
             console.warn("尚未建立任何玩家資料");
@@ -50,7 +52,7 @@ export class DevTest extends Component {
         const total = data.fishList.length;
         const dead = data.fishList.filter(f => f.isDead).length;
 
-        console.log(`玩家ID: ${data.id}`);
+        console.log(`玩家ID: ${data.userId}`);
         console.log(`魚數量: ${total}`);
         console.log(`死魚: ${dead}`);
     }
@@ -77,7 +79,7 @@ export class DevTest extends Component {
             console.warn(`請輸入數字水溫（目前輸入: "${raw}" -> "${normalized}"）`);
             return;
         }
-
+        await DataManager.ready?.catch(()=>{});
         const data = await DataManager.getPlayerData();
         if (!data) return;
 
@@ -89,6 +91,7 @@ export class DevTest extends Component {
 
     /** 設為乾淨水（按鈕觸發） */
     async onSetWaterClean() {
+        await DataManager.ready?.catch(()=>{});
         const data = await DataManager.getPlayerData();
         if (!data) return;
         data.tankEnvironment.waterQualityStatus = 'clean';
@@ -98,6 +101,7 @@ export class DevTest extends Component {
 
     /** 設為髒水（按鈕觸發） */
     async onSetWaterDirty() {
+        await DataManager.ready?.catch(()=>{});
         const data = await DataManager.getPlayerData();
         if (!data) return;
         data.tankEnvironment.waterQualityStatus = 'dirty';
@@ -108,6 +112,7 @@ export class DevTest extends Component {
 
     /** 水質變髒觸發感冒（上次登入改成昨天＋把水質設髒＋累積壞環境一天→ 立刻呼叫 processDailyUpdate */
     async onSimulateDirtyAndSickToday() {
+        await DataManager.ready?.catch(()=>{});
         const data = await DataManager.getPlayerData();
         if (!data) return;
 

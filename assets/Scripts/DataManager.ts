@@ -61,7 +61,7 @@ interface TankData {
 
 /** 玩家 */
 export interface PlayerData {
-    id: number;                    // 玩家 ID
+    userId: string;                // 玩家 ID
     dragonBones: number;           // 遊戲貨幣（龍骨）
     lastLoginDate: string;         // 上次登入日期（升級用）
     lastLoginTime: string;         // 用來計算小時差（飢餓值用）
@@ -89,7 +89,7 @@ export interface PlayerData {
     };
     signInData: {
         weekly: {
-            weekKey: number;               // 該週星期一
+            weekKey: string;               // 該週星期一
             daysSigned: boolean[];         // 一週 7 天簽到紀錄
             questionsCorrect: boolean[];   // 是否答對紀錄
             lastSignDate: string;          // 最後簽到日期
@@ -101,7 +101,6 @@ export interface PlayerData {
             lastSignDate: string;          // 最後簽到日期
         }
     };
-
 }
 
 export interface QuizQuestion {
@@ -111,38 +110,23 @@ export interface QuizQuestion {
 }
 
 export class DataManager {
-    static useLocalStorage = true;
-
-    static async getPlayerData(): Promise<PlayerData | null> {
-        if (this.useLocalStorage) {
-            const json = localStorage.getItem('playerData');
-            return json ? JSON.parse(json) : null;
-        } else {
-            // 預留：未來接 API 或 Firebase 可以寫這裡
-            const res = await fetch('/api/player');
-            return await res.json();
-        }
-    }
-
-    static async savePlayerData(data: any) {
-        if (this.useLocalStorage) {
-            localStorage.setItem('playerData', JSON.stringify(data));
-        } else {
-            await fetch('/api/player', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-        }
-    }
+    static useLocalStorage = false;
+    static apiBase = 'http://localhost:3000';
+    static currentUserId: string | null = null; // 記住當前登入玩家 ID
+    static ready: Promise<void> | null = null;
+    static readyResolve: (() => void) | null = null;
+    static initializing = false;
 
     /** 初始化玩家資料（若不存在） */
-    static async ensureInitialized() {
-        const existing = await this.getPlayerData();
+    static async ensureInitialized(userId: string) {
+        this.setCurrentUser(userId);
+
+        // 先試著取得資料
+        let existing = await this.getPlayerData(userId);
         if (existing) return;
 
         // 建立初始三隻魚
-        const fishList = [];
+        const fishList: FishData[] = [];
         for (let i = 1; i <= 3; i++) {
             fishList.push({
                 id: i,
@@ -166,16 +150,15 @@ export class DataManager {
             });
         }
 
-        const newPlayer = {
-            id: 1,
+        const newPlayer: PlayerData = {
+            userId: userId, 
             dragonBones: 666,
             lastLoginDate: new Date().toISOString().split('T')[0],
+            lastLoginTime: new Date().toISOString(),
             fishList,
             tankList: [{
                 id: 1,
                 name: "主魚缸",
-                waterQuality: 100,
-                temperature: 21,
                 comfort: 80,
                 fishIds: [1, 2, 3]
             }],
@@ -195,6 +178,7 @@ export class DataManager {
                     revivePotion: 10,
                     genderPotion: 10,
                     upgradePotion: 10,
+                    changePotion: 10,
                     heater: 10,
                     fan: 15,
                     brush: 17
@@ -218,17 +202,95 @@ export class DataManager {
             }
         };
 
-        await this.savePlayerData(newPlayer);
-        console.log("玩家資料初始化完成！");
+        // 嘗試建立資料
+        const res = await fetch(`${this.apiBase}/player`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newPlayer)
+        });
+        if (!res.ok) {
+            const text = await res.text();
+            if (text.includes('Player already exists')) {
+            console.warn('玩家已存在，改為載入資料');
+            existing = await this.getPlayerData(userId);
+            return;
+            }
+            console.error('建立玩家資料失敗:', res.status, text);
+        }
     }
 
-    static async getQuizQuestions(): Promise<{ question: string; options: string[]; answerIndex: number }[]> {
+    static setCurrentUser(id: string) {
+        this.currentUserId = id;
+    }
+
+
+    static async init(userId: string) {
+        if (!this.ready) {
+            this.ready = new Promise<void>(res => (this.readyResolve = res));
+        }
+        this.initializing = true;          // 標記：開始初始化
+        this.setCurrentUser(userId);
+        await this.ensureInitialized(userId);
+        this.initializing = false;         // 標記：初始化完畢
+        this.readyResolve?.();             // resolve，喚醒其他等待者
+    }
+
+
+    static async getPlayerData(userId?: string): Promise<PlayerData | null> {
+        // 只有「不是初始化中」才等待 ready，避免死鎖
+        if (this.ready && !this.initializing) {
+            try { await this.ready; } catch {}
+        }
+
+        const fallbackId = (typeof window !== 'undefined') ? localStorage.getItem('currentUserId') : null;
+        const id = (userId ?? this.currentUserId ?? fallbackId ?? '').trim();
+        console.log("ID ", id);
+
+        if (!id) {
+            console.warn('[getPlayerData] 沒有 userId（參數 / currentUserId / localStorage 都拿不到），回 null');
+            return null;
+        }
+
+        try {
+            const res = await fetch(`${this.apiBase}/player/${encodeURIComponent(id)}`);
+            if (!res.ok) {
+            if (res.status === 404) return null;
+            console.error(`取得玩家資料失敗: ${res.status} ${await res.text()}`);
+            return null;
+            }
+            return await res.json();
+        } catch (e) {
+            console.error('[getPlayerData] fetch 失敗：', e);
+            return null;
+        }
+    }
+
+    static async savePlayerData(data: PlayerData): Promise<PlayerData> {
+        if (this.useLocalStorage) {
+            localStorage.setItem('playerData', JSON.stringify(data));
+            return data;
+        }
+        const res = await fetch(`${this.apiBase}/player/${encodeURIComponent(data.userId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error(`savePlayerData failed: ${res.status} ${text}`);
+        }
+        const fresh = await res.json();
+        this.setCurrentUser(fresh.userId);
+        return fresh;
+    }
+
+
+    static async getQuizQuestions(): Promise<QuizQuestion[]> {
         if (this.useLocalStorage) {
             return quizQuestions;
         } else {
-            const res = await fetch('/api/quiz');
-            const data = await res.json();
-            return data.questions;
+            const res = await fetch(`${this.apiBase}/quiz`);
+            return await res.json();
         }
     }
 

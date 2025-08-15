@@ -28,9 +28,14 @@ export class MonthlySignInManager extends Component {
     private dayStampNodes: Node[] = [];
     private playerData: any;
 
-    async onLoad() {
-        await DataManager.ensureInitialized();
+    async start() {
+        await DataManager.ready?.catch(()=>{});
         this.playerData = await DataManager.getPlayerData();
+
+        if (!this.playerData || !this.playerData.signInData) {
+            console.warn('[MonthlySignIn] 尚未取得玩家資料，停用本元件初始化');
+            return;
+        }
 
         this.initDayNodes();
 
@@ -178,7 +183,7 @@ export class MonthlySignInManager extends Component {
             console.log(`月簽到獎勵：${r.name} x${r.count}`);
         });
 
-        await this.savePlayerData();
+        await DataManager.savePlayerData(this.playerData);
 
         this.claimButton.interactable = false;
         this.signInHintLabel.string = "今日已簽到";
@@ -236,9 +241,5 @@ export class MonthlySignInManager extends Component {
             case 'brush': return this.brushSpriteFrame;
             default: return this.defaultSpriteFrame;
         }
-    }
-
-    async savePlayerData() {
-        await DataManager.savePlayerData(this.playerData);
     }
 }

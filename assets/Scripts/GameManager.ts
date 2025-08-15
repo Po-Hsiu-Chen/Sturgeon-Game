@@ -1,9 +1,10 @@
 import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, ProgressBar, UITransform, Vec3, Button, tween, UIOpacity } from 'cc';
 import { SwimmingFish } from './SwimmingFish';
-import { DataManager } from './DataManager';
+import { DataManager, PlayerData } from './DataManager';
 import { FishLogic } from './FishLogic';
 import { TombManager } from './TombManager';
 import { TankEnvironmentManager } from './TankEnvironmentManager';
+import { getOrCreateUserId } from './utils/utils';
 const { ccclass, property } = _decorator;
 
 @ccclass('GameManager')
@@ -59,10 +60,17 @@ export class GameManager extends Component {
 
     private confirmCallback: Function | null = null;         // 確認回調
     private currentTankId: number = 1;                       // 當前魚缸 ID
+    private playerData: PlayerData | null = null;
+    private userId: string = getOrCreateUserId();
 
     /** 初始化 */
     async start() {
-        await DataManager.ensureInitialized();
+        await DataManager.init(this.userId); 
+        this.playerData = await DataManager.getPlayerData();
+        if (!this.playerData) {
+            console.error('玩家資料讀取失敗');
+            return;
+        }
         await this.processDailyUpdate();
 
         this.initButtons();
@@ -130,14 +138,15 @@ export class GameManager extends Component {
     }
 
     async switchTank(tankId: number) {
+        this.playerData = await DataManager.getPlayerData(); 
         this.tankNodes.forEach((node, idx) => {
             node.active = (idx + 1) === tankId;
         });
         this.tombTankNode.active = false;
 
         this.fishArea.removeAllChildren();
-        const playerData = await DataManager.getPlayerData();
-        const tank = playerData.tankList.find(t => t.id === tankId);
+        
+        const tank = this.playerData.tankList.find(t => t.id === tankId);
         if (!tank) {
             console.warn(`找不到魚缸 ${tankId}`);
             return;
@@ -149,7 +158,7 @@ export class GameManager extends Component {
         const margin = 50;
 
         for (const fishId of tank.fishIds) {
-            const fish = playerData.fishList.find(f => f.id === fishId);
+            const fish = this.playerData.fishList.find(f => f.id === fishId);
             if (!fish || fish.isDead) continue;
 
             const prefab = fish.gender === "female"
@@ -188,12 +197,11 @@ export class GameManager extends Component {
     /** 處理魚飢餓與成長 */
     async processDailyUpdate() {
         // 取得資料與時間計算
-        const playerData = await DataManager.getPlayerData();
         const now = new Date();
         const today = now.toISOString().split('T')[0];
-        const lastLoginDate = playerData.lastLoginDate || today;
-        const lastLoginTime = new Date(playerData.lastLoginTime || now);
-        const env = playerData.tankEnvironment;
+        const lastLoginDate = this.playerData.lastLoginDate || today;
+        const lastLoginTime = new Date(this.playerData.lastLoginTime || now);
+        const env = this.playerData.tankEnvironment;
 
         const hoursPassed = (now.getTime() - lastLoginTime.getTime()) / (1000 * 60 * 60);
         const daysPassed = Math.floor((Date.parse(today) - Date.parse(lastLoginDate)) / (1000 * 60 * 60 * 24));
@@ -211,7 +219,7 @@ export class GameManager extends Component {
         }
 
         // 飢餓與成長
-        for (const fish of playerData.fishList) {
+        for (const fish of this.playerData.fishList) {
             if (fish.isDead) continue;
 
             // 套用倍率（自帶倍率 × 生病倍率）
@@ -256,15 +264,15 @@ export class GameManager extends Component {
         }
         
         // 更新環境（水溫與水質）
-        if (TankEnvironmentManager.shouldUpdateTemperature(playerData)) {
-            TankEnvironmentManager.updateTemperature(playerData);
+        if (TankEnvironmentManager.shouldUpdateTemperature(this.playerData)) {
+            TankEnvironmentManager.updateTemperature(this.playerData);
         }
-        TankEnvironmentManager.checkWaterDirty(playerData);
+        TankEnvironmentManager.checkWaterDirty(this.playerData);
 
         // 處理魚生病
         if (daysPassed > 0) {
             // 先依當前環境更新連續壞環境登入天數
-            if (TankEnvironmentManager.isEnvBad(playerData)) {
+            if (TankEnvironmentManager.isEnvBad(this.playerData)) {
                 env.badEnvLoginDays += 1;
             } else {
                 env.badEnvLoginDays = 0; // 環境恢復就重置
@@ -272,7 +280,7 @@ export class GameManager extends Component {
 
             // 達門檻才讓一隻魚生病
             if (env.badEnvLoginDays >= BUFFER_DAYS) {
-                const candidates = playerData.fishList.filter(f => !f.isDead && !f.status.sick);
+                const candidates = this.playerData.fishList.filter(f => !f.isDead && !f.status.sick);
                 if (candidates.length > 0) {
                 const idx = Math.floor(Math.random() * candidates.length);
                 candidates[idx].status.sick = true;
@@ -290,9 +298,9 @@ export class GameManager extends Component {
         }
         
         // 更新記錄的時間
-        playerData.lastLoginDate = today;
-        playerData.lastLoginTime = now.toISOString();
-        await DataManager.savePlayerData(playerData);
+        this.playerData.lastLoginDate = today;
+        this.playerData.lastLoginTime = now.toISOString();
+        await DataManager.savePlayerData(this.playerData);
 
         await this.refreshEnvironmentUI();
         console.log(`更新完成：經過 ${hoursPassed.toFixed(2)} 小時，飢餓與成長資料已更新`);
@@ -301,9 +309,7 @@ export class GameManager extends Component {
     /** 生成魚的實體節點 */
     async spawnFishInTank(tankId: number) {
         this.fishArea.removeAllChildren(); // 清除上一缸魚
-
-        const playerData = await DataManager.getPlayerData();
-        const tank = playerData.tankList.find(t => t.id === tankId);
+        const tank = this.playerData.tankList.find(t => t.id === tankId);
         if (!tank) {
             console.warn(`找不到魚缸 ${tankId}`);
             return;
@@ -315,7 +321,7 @@ export class GameManager extends Component {
         const margin = 50;
 
         for (const fishId of tank.fishIds) {
-            const fish = playerData.fishList.find(f => f.id === fishId);
+            const fish = this.playerData.fishList.find(f => f.id === fishId);
             if (!fish || fish.isDead) continue;
 
             let prefab = fish.gender === "female"
@@ -393,11 +399,10 @@ export class GameManager extends Component {
 
     /** 資料刷新 */
     async refreshEnvironmentUI() {
-        const playerData = await DataManager.getPlayerData();
-        if (!playerData) return;
+        if (!this.playerData) return;
 
-        const env = playerData.tankEnvironment;
-        const items = playerData.inventory.items;
+        const env = this.playerData.tankEnvironment;
+        const items = this.playerData.inventory.items;
 
         // 水溫、水質顯示
         if (this.temperatureLabel) this.temperatureLabel.string = `水溫 : ${env.temperature.toFixed(1)}°C`;
@@ -426,9 +431,8 @@ export class GameManager extends Component {
 
     /** 使用加熱器（點擊） */
     async onClickHeater() {
-        const playerData = await DataManager.getPlayerData();
-        const items = playerData.inventory.items;
-        const env = playerData.tankEnvironment;
+        const items = this.playerData.inventory.items;
+        const env = this.playerData.tankEnvironment;
 
         if (items.heater <= 0) {
             this.showFloatingTextCenter('加熱器不足');
@@ -447,9 +451,8 @@ export class GameManager extends Component {
 
     /** 真正執行加熱器 */
     private async useHeater() {
-        const playerData = await DataManager.getPlayerData();
-        const items = playerData.inventory.items;
-        const env = playerData.tankEnvironment;
+        const items = this.playerData.inventory.items;
+        const env = this.playerData.tankEnvironment;
 
         if (items.heater <= 0) {
             this.showFloatingTextCenter('加熱器不足');
@@ -462,18 +465,17 @@ export class GameManager extends Component {
         }
 
         items.heater -= 1;
-        TankEnvironmentManager.adjustTemperature(playerData);
+        TankEnvironmentManager.adjustTemperature(this.playerData);
 
-        await DataManager.savePlayerData(playerData);
+        await DataManager.savePlayerData(this.playerData);
         await this.refreshEnvironmentUI();
         this.showFloatingTextCenter('已使用加熱器');
     }
 
     /** 使用風扇（點擊） */
     async onClickFan() {
-        const playerData = await DataManager.getPlayerData();
-        const items = playerData.inventory.items;
-        const env = playerData.tankEnvironment;
+        const items = this.playerData.inventory.items;
+        const env = this.playerData.tankEnvironment;
 
         if (items.fan <= 0) {
             this.showFloatingTextCenter('風扇不足');
@@ -492,9 +494,8 @@ export class GameManager extends Component {
 
     /** 真正執行風扇 */
     private async useFan() {
-        const playerData = await DataManager.getPlayerData();
-        const items = playerData.inventory.items;
-        const env = playerData.tankEnvironment;
+        const items = this.playerData.inventory.items;
+        const env = this.playerData.tankEnvironment;
 
         if (items.fan <= 0) {
             this.showFloatingTextCenter('風扇不足');
@@ -507,24 +508,23 @@ export class GameManager extends Component {
         }
 
         items.fan -= 1;
-        TankEnvironmentManager.adjustTemperature(playerData);
+        TankEnvironmentManager.adjustTemperature(this.playerData);
 
-        await DataManager.savePlayerData(playerData);
+        await DataManager.savePlayerData(this.playerData);
         await this.refreshEnvironmentUI();
         this.showFloatingTextCenter('已使用風扇');
     }
 
     /** 使用魚缸刷（點擊） */
     async onClickBrush() {
-        const playerData = await DataManager.getPlayerData();
-        const items = playerData.inventory.items;
-        const env = playerData.tankEnvironment;
+        const items = this.playerData.inventory.items;
+        const env = this.playerData.tankEnvironment;
 
         if (items.brush <= 0) {
             this.showFloatingTextCenter('魚缸刷不足');
             return;
         }
-        if (env.waterQualityStatus = "clean") {
+        if (env.waterQualityStatus === "clean") {
             this.showFloatingTextCenter('目前魚缸很乾淨，無需使用魚缸刷');
             return;
         }
@@ -534,17 +534,16 @@ export class GameManager extends Component {
 
     /** 真正執行魚缸刷 */
     private async useBrush() {
-        const playerData = await DataManager.getPlayerData();
-        const items = playerData.inventory.items;
+        const items = this.playerData.inventory.items;
 
         if (items.brush <= 0) {
             this.showFloatingTextCenter('魚缸刷不足');
             return;
         }
         items.brush -= 1;
-        TankEnvironmentManager.cleanWater(playerData);
+        TankEnvironmentManager.cleanWater(this.playerData);
 
-        await DataManager.savePlayerData(playerData);
+        await DataManager.savePlayerData(this.playerData);
         await this.refreshEnvironmentUI();
         this.showFloatingTextCenter('已清潔魚缸');
     }

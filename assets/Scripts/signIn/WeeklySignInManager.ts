@@ -38,9 +38,15 @@ export class WeeklySignInManager extends Component {
     private todayIndex: number = 0;
     private playerData: any;
 
-    async onLoad() {
-        await DataManager.ensureInitialized(); // 確保資料存在
-        this.playerData = await DataManager.getPlayerData(); // 讀資料
+    async start() {
+        await DataManager.ready?.catch(()=>{});
+        this.playerData = await DataManager.getPlayerData();
+
+        if (!this.playerData || !this.playerData.signInData) {
+            console.warn('[WeeklySignIn] 尚未取得玩家資料，停用本元件初始化');
+            return;
+        }
+
         this.handleWeekReset();
         this.todayIndex = getTodayIndex();
         this.updateSignInUI();
@@ -59,7 +65,7 @@ export class WeeklySignInManager extends Component {
     }
 
     /** 判斷當週是否要重置簽到狀態 */
-    handleWeekReset() {
+    async handleWeekReset() {
         const currentWeekKey = getWeekStartKey(); 
         const weekly = this.playerData.signInData.weekly || {};
         const storedWeekKey: string | undefined = weekly.weekKey;
@@ -75,13 +81,8 @@ export class WeeklySignInManager extends Component {
                 questionsCorrect: [false, false, false, false, false, false, false],
                 lastSignDate: '' 
             };
-            this.savePlayerData();
+            await DataManager.savePlayerData(this.playerData);
         }
-    }
-
-    /** 儲存玩家資料 */
-    async savePlayerData() {
-        await DataManager.savePlayerData(this.playerData);
     }
 
     /** 更新 7 格簽到 UI（顏色與文字 */
@@ -183,7 +184,7 @@ export class WeeklySignInManager extends Component {
         this.node.getComponent(UITransform).node.parent!.addChild(popup);
 
         // 儲存 + 更新 UI + 鎖按鈕
-        await this.savePlayerData();
+        await DataManager.savePlayerData(this.playerData);
         this.updateSignInUI();
         this.claimButton.interactable = false;
 

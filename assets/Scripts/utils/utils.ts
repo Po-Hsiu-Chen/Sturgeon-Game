@@ -28,3 +28,13 @@ export function getWeekStartKey(date = new Date(), tzOffsetMinutes = 480): strin
     d.setUTCDate(d.getUTCDate() - dow);  // 回到本週一
     return d.toISOString().slice(0, 10); // "YYYY-MM-DD"
 }
+
+/** 隨機 UserId */
+export function getOrCreateUserId(): string {
+    const savedId = localStorage.getItem('userId');
+    if (savedId) return savedId;
+    const newId = 'TEMP_' + Math.random().toString(36).substring(2, 10);
+    localStorage.setItem('userId', newId);
+    return newId;
+}
+
