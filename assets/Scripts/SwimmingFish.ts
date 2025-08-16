@@ -87,7 +87,6 @@ export class SwimmingFish extends Component {
     }
 
     async onClickFish() {
-        console.log("onClickFish");
         if (!this.emotionBubble) return;
 
         // 同一條：改成關閉

@@ -48,7 +48,7 @@ interface TankEnvironment {
     lastCleanTime: string;                  // 上次清理時間
     isTemperatureDanger: boolean;           // 是否水溫異常（登入後根據時間計算）
     loginDaysSinceClean: number;            // 清缸後累積的登入天數
-    badEnvLoginDays?: number;               // 連續壞環境的登入天數
+    badEnvLoginDays: number;                // 連續壞環境的登入天數
 }
 
 /** 魚缸 */
@@ -111,118 +111,24 @@ export interface QuizQuestion {
 
 export class DataManager {
     static useLocalStorage = false;
-    static apiBase = 'http://localhost:3000';
+    static apiBase = '';
     static currentUserId: string | null = null; // 記住當前登入玩家 ID
     static ready: Promise<void> | null = null;
     static readyResolve: (() => void) | null = null;
     static initializing = false;
 
-    /** 初始化玩家資料（若不存在） */
     static async ensureInitialized(userId: string) {
         this.setCurrentUser(userId);
-
-        // 先試著取得資料
-        let existing = await this.getPlayerData(userId);
-        if (existing) return;
-
-        // 建立初始三隻魚
-        const fishList: FishData[] = [];
-        for (let i = 1; i <= 3; i++) {
-            fishList.push({
-                id: i,
-                name: `鱘龍${i}號`,
-                gender: i % 2 === 0 ? "female" : "male",
-                // stage: 1,
-                // growthDaysPassed: 0,
-                stage: 2, // 測試用
-                growthDaysPassed: 14, // 測試用
-                lastFedDate: new Date().toISOString(),
-                hunger: 33,
-                hungerRateMultiplier: 1.0,
-                appearance: "ugly",
-                outfit: { head: null, accessories: [] },
-                isMarried: false,
-                spouseId: null,
-                status: { hungry: false, hot: false, cold: false, sick: false },
-                emotion: "happy",
-                isDead: false,
-                tankId: 1
-            });
-        }
-
-        const newPlayer: PlayerData = {
-            userId: userId, 
-            dragonBones: 666,
-            lastLoginDate: new Date().toISOString().split('T')[0],
-            lastLoginTime: new Date().toISOString(),
-            fishList,
-            tankList: [{
-                id: 1,
-                name: "主魚缸",
-                comfort: 80,
-                fishIds: [1, 2, 3]
-            }],
-            tankEnvironment: {
-                temperature: 21,
-                lastTempUpdateTime: new Date().toISOString(),
-                waterQualityStatus: "clean",
-                lastCleanTime: new Date().toISOString(),
-                isTemperatureDanger: false,
-                loginDaysSinceClean: 0,
-                badEnvLoginDays: 0,
-            },
-            inventory: {
-                feeds: { normal: 666, premium: 66 },
-                items: {
-                    coldMedicine: 10,
-                    revivePotion: 10,
-                    genderPotion: 10,
-                    upgradePotion: 10,
-                    changePotion: 10,
-                    heater: 10,
-                    fan: 15,
-                    brush: 17
-                }
-            },
-            fashion: { owned: [] },
-            signInData: {
-                weekly: {
-                    //daysSigned: [false, false, false, false, false, false, true], // 測試用
-                    weekKey: getWeekStartKey(),
-                    daysSigned: [false, false, false, false, false, false, false],
-                    questionsCorrect: [false, false, false, false, false, false, false],
-                    lastSignDate: ""
-                },
-                monthly: {
-                    month: new Date().getMonth() + 1,
-                    year: new Date().getFullYear(),
-                    signedDaysCount: 2,
-                    lastSignDate: ""
-                }
-            }
-        };
-
-        // 嘗試建立資料
-        const res = await fetch(`${this.apiBase}/player`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newPlayer)
-        });
-        if (!res.ok) {
-            const text = await res.text();
-            if (text.includes('Player already exists')) {
-            console.warn('玩家已存在，改為載入資料');
-            existing = await this.getPlayerData(userId);
-            return;
-            }
-            console.error('建立玩家資料失敗:', res.status, text);
+        // 檢查後端是否存在（/auth/line 會負責建），找不到就讓上層決定怎麼處理
+        const existing = await this.getPlayerData(userId);
+        if (!existing) {
+            console.error('[DataManager] 後端沒有這個玩家，請重新登入 LINE');
         }
     }
 
     static setCurrentUser(id: string) {
         this.currentUserId = id;
     }
-
 
     static async init(userId: string) {
         if (!this.ready) {
@@ -244,7 +150,6 @@ export class DataManager {
 
         const fallbackId = (typeof window !== 'undefined') ? localStorage.getItem('currentUserId') : null;
         const id = (userId ?? this.currentUserId ?? fallbackId ?? '').trim();
-        console.log("ID ", id);
 
         if (!id) {
             console.warn('[getPlayerData] 沒有 userId（參數 / currentUserId / localStorage 都拿不到），回 null');
@@ -284,7 +189,6 @@ export class DataManager {
         return fresh;
     }
 
-
     static async getQuizQuestions(): Promise<QuizQuestion[]> {
         if (this.useLocalStorage) {
             return quizQuestions;
@@ -302,5 +206,3 @@ export class DataManager {
         }
     }
 }
-
-

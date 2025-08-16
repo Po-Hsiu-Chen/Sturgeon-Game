@@ -5,7 +5,10 @@ import { FishLogic } from './FishLogic';
 import { TombManager } from './TombManager';
 import { TankEnvironmentManager } from './TankEnvironmentManager';
 import { getOrCreateUserId } from './utils/utils';
+import { initLiff, getIdentity } from './bridge/LiffBridge';
+import { authWithLine } from './api/Api';
 const { ccclass, property } = _decorator;
+const LIFF_ID = '2007937783-PJ4ZRBdY'; 
 
 @ccclass('GameManager')
 export class GameManager extends Component {
@@ -65,21 +68,69 @@ export class GameManager extends Component {
 
     /** 初始化 */
     async start() {
-        await DataManager.init(this.userId); 
-        this.playerData = await DataManager.getPlayerData();
+        // 檢查是否要強制 dev 模式（例如網址帶 ?dev=1）
+        const urlParams = new URLSearchParams(window.location.search);
+        const forceDev = urlParams.get('dev') === '1';
+
+        try {
+            if (forceDev) {
+                console.warn('[Game] 強制 DEV 模式');
+                DataManager.useLocalStorage = true;
+                await DataManager.init('DEV_LOCAL');
+                this.playerData = await DataManager.getPlayerData();
+            } else {
+                // === 正常 LIFF 登入流程 ===
+                await initLiff(LIFF_ID);
+                const { idToken } = await getIdentity();
+                if (!idToken) {
+                    throw new Error('取不到 idToken，請用 LINE App / LIFF URL 開啟');
+                }
+
+                const { lineUserId } = await authWithLine(idToken);
+
+                await DataManager.init(lineUserId);
+                this.playerData = await DataManager.getPlayerData();
+            }
+        } catch (e) {
+            console.error('[Game] 啟動失敗，錯誤：', e);
+            // 注意：這裡就「不要」自動 fallback 到 DEV_LOCAL
+            return;
+        }
+
         if (!this.playerData) {
             console.error('玩家資料讀取失敗');
             return;
         }
+
+        // === 正常遊戲初始化 ===
         await this.processDailyUpdate();
 
         this.initButtons();
         this.initDialogs();
         this.initPanels();
 
-        await this.switchTank(1);   // 預設顯示主魚缸
+        await this.switchTank(1); 
         await this.tombManager?.init();
         await this.refreshEnvironmentUI();
+
+        // （可選）把 profile.displayName / pictureUrl 顯示在 UI
+
+
+        // await DataManager.init(this.userId); 
+        // this.playerData = await DataManager.getPlayerData();
+        // if (!this.playerData) {
+        //     console.error('玩家資料讀取失敗');
+        //     return;
+        // }
+        // await this.processDailyUpdate();
+
+        // this.initButtons();
+        // this.initDialogs();
+        // this.initPanels();
+
+        // await this.switchTank(1);   // 預設顯示主魚缸
+        // await this.tombManager?.init();
+        // await this.refreshEnvironmentUI();
     }
 
     /** 初始化所有按鈕事件 */
