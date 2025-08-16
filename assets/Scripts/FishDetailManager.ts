@@ -133,7 +133,7 @@ export class FishDetailManager extends Component {
         this.hungerLabel.string = `飢餓值：${Math.floor(fish.hunger)} / 100`;
         
         // 剩餘數量顯示
-        const playerData = await DataManager.getPlayerData();
+        const playerData = await DataManager.getPlayerDataCached();
         this.feedNormalCountLabel.string = playerData.inventory.feeds.normal.toString();
         this.feedPremiumCountLabel.string = playerData.inventory.feeds.premium.toString();
         this.genderPotionCountLabel.string = playerData.inventory.items.genderPotion.toString();
@@ -172,7 +172,7 @@ export class FishDetailManager extends Component {
         this.feedFish(20, 'premium');
     }
     async feedFish(amount: number, type: 'normal' | 'premium') {
-        const playerData = await DataManager.getPlayerData();
+        const playerData = await DataManager.getPlayerDataCached();
         const fish = playerData.fishList.find(f => f.id === this.currentFishId);
         if (!fish) return;
         
@@ -198,7 +198,7 @@ export class FishDetailManager extends Component {
             return;
         }
 
-        const playerData = await DataManager.getPlayerData();
+        const playerData = await DataManager.getPlayerDataCached();
         const fish = playerData.fishList.find(f => f.id === this.currentFishId);
         if (!fish) return;
 
@@ -240,7 +240,7 @@ export class FishDetailManager extends Component {
         this.showConfirmDialog("確定要使用變性藥嗎？", () => this.useGenderPotion());
     }
     private async useGenderPotion() {
-        const playerData = await DataManager.getPlayerData();
+        const playerData = await DataManager.getPlayerDataCached();
         const fish = playerData.fishList.find(f => f.id === this.currentFishId);
         if (!fish) return;
 
@@ -262,7 +262,7 @@ export class FishDetailManager extends Component {
         this.showConfirmDialog("確定要使用升級藥嗎？", () => this.useUpgradePotion());
     }
     private async useUpgradePotion() {
-        const playerData = await DataManager.getPlayerData();
+        const playerData = await DataManager.getPlayerDataCached();
         const fish = playerData.fishList.find(f => f.id === this.currentFishId);
         if (!fish) return;
 
@@ -286,7 +286,7 @@ export class FishDetailManager extends Component {
         this.showConfirmDialog("確定要使用感冒藥嗎？", () => this.useColdMedicine());
     }
     private async useColdMedicine() {
-        const playerData = await DataManager.getPlayerData();
+        const playerData = await DataManager.getPlayerDataCached();
         const fish = playerData.fishList.find(f => f.id === this.currentFishId);
         if (!fish) return;
 
@@ -361,7 +361,7 @@ export class FishDetailManager extends Component {
     }
 
     async showRenamePanel() {
-        const playerData = await DataManager.getPlayerData();
+        const playerData = await DataManager.getPlayerDataCached();
         const fish = playerData.fishList.find(f => f.id === this.currentFishId);
         if (!fish) return;
 

@@ -155,7 +155,7 @@ app.put('/player/:userId', async (req, res) => {
   delete updateData.userId;
 
   try {
-    // 先確認這個玩家存在（順便打一條日誌）
+    // 先確認這個玩家存在
     const exists = await users.findOne({ userId: id });
     console.log('[PUT /player]', { id, exists: !!exists });
 

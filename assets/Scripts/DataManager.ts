@@ -117,6 +117,19 @@ export class DataManager {
     static readyResolve: (() => void) | null = null;
     static initializing = false;
 
+    static _snapshot: PlayerData | null = null;
+    static _snapshotTime = 0;
+    static _inFlight: Promise<PlayerData | null> | null = null;
+    static _listeners = new Set<(p: PlayerData)=>void>();
+
+    static onChange(cb: (p: PlayerData)=>void) {
+        this._listeners.add(cb);
+        return () => this._listeners.delete(cb);
+        }
+        static _emit(p: PlayerData) {
+        for (const cb of this._listeners) cb(p);
+    }
+
     static async ensureInitialized(userId: string) {
         this.setCurrentUser(userId);
         // 檢查後端是否存在（/auth/line 會負責建），找不到就讓上層決定怎麼處理
@@ -140,7 +153,6 @@ export class DataManager {
         this.initializing = false;         // 標記：初始化完畢
         this.readyResolve?.();             // resolve，喚醒其他等待者
     }
-
 
     static async getPlayerData(userId?: string): Promise<PlayerData | null> {
         // 只有「不是初始化中」才等待 ready，避免死鎖
@@ -205,4 +217,48 @@ export class DataManager {
             console.log('玩家資料已清除');
         }
     }
+
+    // -------- 快取機制 --------
+    static async getPlayerDataCached(opts?: { maxAgeMs?: number, refresh?: boolean, userId?: string }): Promise<PlayerData | null> {
+        const maxAge = opts?.maxAgeMs ?? 3000; // 預設快取 3 秒
+        const now = Date.now();
+        const id = opts?.userId ?? this.currentUserId;
+
+        // 有快取 & 沒過期 & 沒要求 refresh
+        if (this._snapshot && (now - this._snapshotTime) < maxAge && !opts?.refresh) {
+            return this._snapshot;
+        }
+
+        // 如果有進行中的請求，直接共用
+        if (this._inFlight) {
+            return this._inFlight;
+        }
+
+        // 否則真正去抓
+        this._inFlight = (async () => {
+            const fresh = await this.getPlayerData(id);
+            this._inFlight = null;
+            if (fresh) {
+                this._snapshot = fresh;
+                this._snapshotTime = Date.now();
+                this._emit(fresh); // 廣播給訂閱者
+            }
+            return fresh;
+        })();
+
+        return this._inFlight;
+    }
+
+    static async refreshPlayerData(userId?: string) {
+        return this.getPlayerDataCached({ refresh: true, userId });
+    }
+
+    static async savePlayerDataWithCache(data: PlayerData): Promise<PlayerData> {
+        const fresh = await this.savePlayerData(data);
+        this._snapshot = fresh;
+        this._snapshotTime = Date.now();
+        this._emit(fresh);
+        return fresh;
+    }
+
 }

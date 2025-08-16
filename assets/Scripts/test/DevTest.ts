@@ -26,7 +26,7 @@ export class DevTest extends Component {
         }
 
         await DataManager.ready?.catch(()=>{});
-        const data = await DataManager.getPlayerData();
+        const data = await DataManager.getPlayerDataCached();
         if (!data) return;
 
         const fish = data.fishList.find(f => f.id === id);
@@ -36,14 +36,14 @@ export class DevTest extends Component {
         }
 
         fish.hunger = 100;
-        await DataManager.savePlayerData(data);
+        await DataManager.savePlayerDataWithCache(data);
         console.log(`魚 ${fish.name} 飢餓設為 100，將於下次啟動自動死亡`);
     }
 
     /** 印出目前魚的簡要摘要 */
     async onPrintSummary() {
         await DataManager.ready?.catch(()=>{});
-        const data = await DataManager.getPlayerData();
+        const data = await DataManager.getPlayerDataCached();
         if (!data) {
             console.warn("尚未建立任何玩家資料");
             return;
@@ -80,11 +80,11 @@ export class DevTest extends Component {
             return;
         }
         await DataManager.ready?.catch(()=>{});
-        const data = await DataManager.getPlayerData();
+        const data = await DataManager.getPlayerDataCached();
         if (!data) return;
 
         data.tankEnvironment.temperature = v;
-        await DataManager.savePlayerData(data);
+        await DataManager.savePlayerDataWithCache(data);
         console.log(`水溫已設為 ${v}°C`);
     }
 
@@ -92,20 +92,20 @@ export class DevTest extends Component {
     /** 設為乾淨水（按鈕觸發） */
     async onSetWaterClean() {
         await DataManager.ready?.catch(()=>{});
-        const data = await DataManager.getPlayerData();
+        const data = await DataManager.getPlayerDataCached();
         if (!data) return;
         data.tankEnvironment.waterQualityStatus = 'clean';
-        await DataManager.savePlayerData(data);
+        await DataManager.savePlayerDataWithCache(data);
         console.log('水質已設為乾淨');
     }
 
     /** 設為髒水（按鈕觸發） */
     async onSetWaterDirty() {
         await DataManager.ready?.catch(()=>{});
-        const data = await DataManager.getPlayerData();
+        const data = await DataManager.getPlayerDataCached();
         if (!data) return;
         data.tankEnvironment.waterQualityStatus = 'dirty';
-        await DataManager.savePlayerData(data);
+        await DataManager.savePlayerDataWithCache(data);
         console.log('水質已設為髒');
     }
 
@@ -113,7 +113,7 @@ export class DevTest extends Component {
     /** 水質變髒觸發感冒（上次登入改成昨天＋把水質設髒＋累積壞環境一天→ 立刻呼叫 processDailyUpdate */
     async onSimulateDirtyAndSickToday() {
         await DataManager.ready?.catch(()=>{});
-        const data = await DataManager.getPlayerData();
+        const data = await DataManager.getPlayerDataCached();
         if (!data) return;
 
         const env = data.tankEnvironment;
@@ -131,7 +131,10 @@ export class DevTest extends Component {
         data.lastLoginDate = yesterday.toISOString().split('T')[0];
         data.lastLoginTime = yesterday.toISOString();
 
-        await DataManager.savePlayerData(data);
+        const before = JSON.stringify(data, null, 2);
+        const fresh = await DataManager.savePlayerDataWithCache(data);
+        console.log("送出的 data:", before);
+        console.log("伺服器回傳 fresh:", JSON.stringify(fresh, null, 2));
 
         // 直接觸發你的每日更新流程（會把 badEnvLoginDays += 1 → 達門檻 → 隨機一隻生病）
         const gm = find('/GameManager')?.getComponent(GameManager);

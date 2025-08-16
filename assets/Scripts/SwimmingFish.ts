@@ -128,7 +128,7 @@ export class SwimmingFish extends Component {
     }
 
     async onClickMagnifier() {
-        const playerData = await DataManager.getPlayerData();
+        const playerData = await DataManager.getPlayerDataCached();
         const fishId = parseInt(this.node.name.split('_')[1]);
         const fishData = playerData.fishList.find(f => f.id === fishId);
 
@@ -143,7 +143,7 @@ export class SwimmingFish extends Component {
 
     private async updateBubbleEmotionIcon() {
         if (!this.emotionSprite) return;
-        const playerData = await DataManager.getPlayerData();
+        const playerData = await DataManager.getPlayerDataCached();
         const env = playerData?.tankEnvironment;
         const emo = SwimmingFish.computeEmotion(this.fishData, env);
         const sf = SwimmingFish.getEmotionSpriteByKey(emo);
