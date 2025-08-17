@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, ProgressBar, UITransform, Vec3, Button, tween, UIOpacity } from 'cc';
+import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, UITransform, Vec3, Button, SpriteFrame, ImageAsset, Texture2D } from 'cc';
 import { SwimmingFish } from './SwimmingFish';
 import { DataManager, PlayerData } from './DataManager';
 import { FishLogic } from './FishLogic';
@@ -9,7 +9,7 @@ import { showFloatingTextCenter } from './utils/UIUtils';
 import { initLiff, getIdentity } from './bridge/LiffBridge';
 import { authWithLine } from './api/Api';
 const { ccclass, property } = _decorator;
-const LIFF_ID = '2007937783-PJ4ZRBdY'; 
+const LIFF_ID = '2007937783-PJ4ZRBdY';
 
 @ccclass('GameManager')
 export class GameManager extends Component {
@@ -26,7 +26,7 @@ export class GameManager extends Component {
     @property(Node) tombTankNode: Node = null!;                 // 墓地魚缸節點
 
     // 簽到面板
-    @property(Node) signInPanel: Node = null!;  
+    @property(Node) signInPanel: Node = null!;
 
     // 環境資訊
     @property(Label) temperatureLabel: Label = null!;           // 溫度顯示
@@ -60,7 +60,13 @@ export class GameManager extends Component {
     @property(Node) tombHintPanel: Node = null!;                // 墓地提示面板
     @property(Button) tombHintCloseBtn: Button = null!;         // 墓地提示關閉按鈕
 
-    @property(Node) floatingNode: Node = null!;                
+    // user data
+    @property(Label) userNameLabel: Label = null!;
+    @property(Label) userIdLabel: Label = null!;
+    @property(Sprite) userAvatar: Sprite = null!;
+    @property(SpriteFrame) defaultAvatar: SpriteFrame = null!;
+
+    @property(Node) floatingNode: Node = null!;
 
     private confirmCallback: Function | null = null;         // 確認回調
     private currentTankId: number = 1;                       // 當前魚缸 ID
@@ -115,28 +121,43 @@ export class GameManager extends Component {
         this.initDialogs();
         this.initPanels();
 
-        await this.switchTank(1); 
+        await this.switchTank(1);
         await this.tombManager?.init();
         await this.refreshEnvironmentUI();
 
-        // （可選）把 profile.displayName / pictureUrl 顯示在 UI
 
+        // 顯示基本資料
+        this.userNameLabel.string = this.playerData.displayName || "未命名";
+        this.userIdLabel.string = this.playerData.userId || "";
 
-        // await DataManager.init(this.userId); 
-        // this.playerData = await DataManager.getPlayerDataCached();
-        // if (!this.playerData) {
-        //     console.error('玩家資料讀取失敗');
-        //     return;
-        // }
-        // await this.processDailyUpdate();
+        // 載入頭貼
+        if (this.playerData.picture) {
+            this.loadAvatar(this.playerData.picture);
+        } else {
+            this.userAvatar.spriteFrame = this.defaultAvatar;
+        }
 
-        // this.initButtons();
-        // this.initDialogs();
-        // this.initPanels();
+    }
 
-        // await this.switchTank(1);   // 預設顯示主魚缸
-        // await this.tombManager?.init();
-        // await this.refreshEnvironmentUI();
+    /** 載入頭貼 */
+    async loadAvatar(url: string) {
+        try {
+            const res = await fetch(url, { mode: 'cors' });
+            const blob = await res.blob();
+            const bitmap = await createImageBitmap(blob);
+            const imageAsset = new ImageAsset(bitmap);
+
+            const texture = new Texture2D();
+            texture.image = imageAsset;
+
+            const spriteFrame = new SpriteFrame();
+            spriteFrame.texture = texture;
+
+            this.userAvatar.spriteFrame = spriteFrame;
+        } catch (err) {
+            console.error("載入頭貼失敗", err);
+            this.userAvatar.spriteFrame = this.defaultAvatar;
+        }
     }
 
     /** 初始化所有按鈕事件 */
@@ -195,14 +216,14 @@ export class GameManager extends Component {
     }
 
     async switchTank(tankId: number) {
-        this.playerData = await DataManager.getPlayerDataCached(); 
+        this.playerData = await DataManager.getPlayerDataCached();
         this.tankNodes.forEach((node, idx) => {
             node.active = (idx + 1) === tankId;
         });
         this.tombTankNode.active = false;
 
         this.fishArea.removeAllChildren();
-        
+
         const tank = this.playerData.tankList.find(t => t.id === tankId);
         if (!tank) {
             console.warn(`找不到魚缸 ${tankId}`);
@@ -287,7 +308,7 @@ export class GameManager extends Component {
             // 飢餓更新（套用有效倍率）
             fish.hunger += hoursPassed * effectiveRate;
             fish.hunger = Math.min(fish.hunger, 100);
-            
+
             // 魚飢餓過久而死亡
             if (fish.hunger >= 100) {
                 fish.isDead = true;
@@ -307,7 +328,7 @@ export class GameManager extends Component {
                     console.log(`${fish.name} 升級為第 ${fish.stage} 階！（自然長大）`);
                 }
             }
-            
+
             // 情緒更新
             if (fish.hunger >= 80) {
                 fish.emotion = "hungry";
@@ -319,7 +340,7 @@ export class GameManager extends Component {
         if (daysPassed > 0) {
             env.loginDaysSinceClean += 1;
         }
-        
+
         // 更新環境（水溫與水質）
         if (TankEnvironmentManager.shouldUpdateTemperature(this.playerData)) {
             TankEnvironmentManager.updateTemperature(this.playerData);
@@ -339,10 +360,10 @@ export class GameManager extends Component {
             if (env.badEnvLoginDays >= BUFFER_DAYS) {
                 const candidates = this.playerData.fishList.filter(f => !f.isDead && !f.status.sick);
                 if (candidates.length > 0) {
-                const idx = Math.floor(Math.random() * candidates.length);
-                candidates[idx].status.sick = true;
-                console.log(`環境不良已持續 ${env.badEnvLoginDays} 天，${candidates[idx].name} 生病了`);
-                env.badEnvLoginDays = 0;   
+                    const idx = Math.floor(Math.random() * candidates.length);
+                    candidates[idx].status.sick = true;
+                    console.log(`環境不良已持續 ${env.badEnvLoginDays} 天，${candidates[idx].name} 生病了`);
+                    env.badEnvLoginDays = 0;
                 }
             }
         }
@@ -353,7 +374,7 @@ export class GameManager extends Component {
             const message = `${nameList}\n因為太餓，沒能撐下去...\n但牠的記憶還在某個地方等你`;
             this.showDeathNotice(message);
         }
-        
+
         // 更新記錄的時間
         this.playerData.lastLoginDate = today;
         this.playerData.lastLoginTime = now.toISOString();
@@ -448,7 +469,7 @@ export class GameManager extends Component {
 
         return newFishNode;
     }
-    
+
     showDeathNotice(message: string) {
         this.deathNoticeLabel.string = message;
         this.deathNoticePanel.active = true;
@@ -477,11 +498,11 @@ export class GameManager extends Component {
 
         // 按鈕能否點擊
         const isTooCold = env.temperature < this.minComfortTemp;
-        const isTooHot  = env.temperature > this.maxComfortTemp;
+        const isTooHot = env.temperature > this.maxComfortTemp;
 
         if (this.heaterBtn) this.heaterBtn.interactable = items.heater > 0 && isTooCold;
-        if (this.fanBtn)    this.fanBtn.interactable    = items.fan    > 0 && isTooHot;
-        if (this.brushBtn)  this.brushBtn.interactable  = items.brush  > 0; // 刷子不受溫度限制
+        if (this.fanBtn) this.fanBtn.interactable = items.fan > 0 && isTooHot;
+        if (this.brushBtn) this.brushBtn.interactable = items.brush > 0; // 刷子不受溫度限制
 
         this.updateEnvironmentOverlays(env);
     }
@@ -608,11 +629,11 @@ export class GameManager extends Component {
     private updateEnvironmentOverlays(env: any) {
         const isDirty = env.waterQualityStatus !== 'clean';
         const tooCold = env.temperature < this.minComfortTemp;
-        const tooHot  = env.temperature > this.maxComfortTemp;
+        const tooHot = env.temperature > this.maxComfortTemp;
 
         if (this.dirtyWaterOverlay) this.dirtyWaterOverlay.active = isDirty;
         if (this.coldOverlay) this.coldOverlay.active = !isDirty && tooCold; // 髒水優先
-        if (this.hotOverlay)  this.hotOverlay.active  = !isDirty && tooHot;  // 髒水優先
+        if (this.hotOverlay) this.hotOverlay.active = !isDirty && tooHot;  // 髒水優先
     }
 
     private showConfirmDialog(message: string, onConfirm: Function) {
@@ -623,8 +644,8 @@ export class GameManager extends Component {
     }
 
     public showFriendTank(friendData: {
-        userId:string, displayName?:string,
-        tankEnvironment:any, tankList:any[], fishList:any[]
+        userId: string, displayName?: string,
+        tankEnvironment: any, tankList: any[], fishList: any[]
     }) {
 
     }

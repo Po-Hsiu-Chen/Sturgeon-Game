@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, EditBox, Label, Prefab, instantiate, Button } from 'cc';
+import { _decorator, Component, Node, EditBox, Label, Prefab, instantiate, Button, Sprite, SpriteFrame, Texture2D, ImageAsset } from 'cc';
 import { DataManager } from './DataManager';
 import { GameManager } from './GameManager';
 import { showFloatingTextCenter } from './utils/UIUtils';
@@ -13,6 +13,7 @@ export class FriendPanel extends Component {
     @property(Prefab) friendRowPrefab: Prefab = null!;
     @property(Node) floatingNode: Node = null!;
     @property(Node) emptyStateNode: Node = null!;
+    @property(SpriteFrame) defaultAvatar: SpriteFrame = null!; // 預設頭貼
 
     onEnable() {
         this.refreshList();
@@ -40,12 +41,29 @@ export class FriendPanel extends Component {
             for (const f of friends) {
                 const row = instantiate(this.friendRowPrefab);
 
+                // 名字
                 const nameLabel = row.getChildByName('NameLabel')?.getComponent(Label);
                 if (nameLabel) nameLabel.string = f.displayName || '(未設定暱稱)';
 
+                // ID
                 const idLabel = row.getChildByName('IdLabel')?.getComponent(Label);
                 if (idLabel) idLabel.string = f.userId;
 
+                // 頭貼
+                const avatarMask = row.getChildByName('UserAvatarMask');
+                const avatarSprite = avatarMask?.getChildByName('UserAvatar')?.getComponent(Sprite);
+                if (avatarSprite) {
+                    console.log("有avatarSprite")
+                    if (f.picture) {
+                        console.log("有picture");
+                        this.loadAvatar(f.picture, avatarSprite);
+                    } else {
+                        console.log("沒有picture");
+                        avatarSprite.spriteFrame = this.defaultAvatar;
+                    }
+                }
+
+                // 查看按鈕
                 const viewBtn = row.getChildByName('ViewBtn')?.getComponent(Button);
                 if (viewBtn) {
                     viewBtn.node.on(Button.EventType.CLICK, () => this.onViewFriendTank(f.userId), this);
@@ -56,6 +74,26 @@ export class FriendPanel extends Component {
         } catch (e) {
             console.warn('[FriendPanel] refreshList failed:', e);
             showFloatingTextCenter(this.floatingNode, '載入好友清單失敗');
+        }
+    }
+
+    async loadAvatar(url: string, sprite: Sprite) {
+        try {
+            const res = await fetch(url, { mode: 'cors' });
+            const blob = await res.blob();
+            const bitmap = await createImageBitmap(blob);
+            const imageAsset = new ImageAsset(bitmap);
+
+            const texture = new Texture2D();
+            texture.image = imageAsset;
+
+            const spriteFrame = new SpriteFrame();
+            spriteFrame.texture = texture;
+
+            sprite.spriteFrame = spriteFrame;
+        } catch (err) {
+            console.warn("載入好友頭貼失敗:", err);
+            sprite.spriteFrame = this.defaultAvatar;
         }
     }
 
@@ -85,7 +123,6 @@ export class FriendPanel extends Component {
             }
         }
     }
-
 
     async onViewFriendTank(friendUserId: string) {
         try {

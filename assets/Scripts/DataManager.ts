@@ -62,6 +62,8 @@ interface TankData {
 /** 玩家 */
 export interface PlayerData {
     userId: string;                // 玩家 ID
+    displayName: string;           // 玩家名稱
+    picture: string;               // 玩家頭貼
     dragonBones: number;           // 遊戲貨幣（龍骨）
     lastLoginDate: string;         // 上次登入日期（升級用）
     lastLoginTime: string;         // 用來計算小時差（飢餓值用）

@@ -185,7 +185,7 @@ app.get('/friends/:userId', async (req, res) => {
   if (!user) return res.status(404).json({ error: '找不到玩家' });
 
   const friendList = await users.find({ userId: { $in: user.friends || [] } })
-    .project({ userId: 1, displayName: 1, _id: 0 })
+    .project({ userId: 1, displayName: 1, picture: 1, _id: 0 }) 
     .toArray();
 
   res.json(friendList);
