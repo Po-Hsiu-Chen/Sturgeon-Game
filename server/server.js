@@ -25,14 +25,14 @@ const client = new MongoClient(uri);
 let db, users, quiz;
 
 async function initDB() {
-    await client.connect();
-    db = client.db('Sturgeon-Game'); // 連到 Sturgeon-Game 資料庫
-    users = db.collection('users');
-    quiz = db.collection('quiz-questions');
+  await client.connect();
+  db = client.db('Sturgeon-Game'); // 連到 Sturgeon-Game 資料庫
+  users = db.collection('users');
+  quiz = db.collection('quiz-questions');
 
-    // 確保 userId 唯一
-    await users.createIndex({ userId: 1 }, { unique: true });
-    console.log('MongoDB 連線成功');
+  // 確保 userId 唯一
+  await users.createIndex({ userId: 1 }, { unique: true });
+  console.log('MongoDB 連線成功');
 }
 initDB();
 
@@ -79,7 +79,7 @@ function buildDefaultPlayer(userId, displayName, picture) {
     lastLoginDate: today,
     lastLoginTime: now.toISOString(),
     fishList,
-    tankList: [{ id: 1, name: "主魚缸", comfort: 80, fishIds: [1,2,3] }],
+    tankList: [{ id: 1, name: "主魚缸", comfort: 80, fishIds: [1, 2, 3] }],
     tankEnvironment: {
       temperature: 21,
       lastTempUpdateTime: now.toISOString(),
@@ -105,9 +105,9 @@ function buildDefaultPlayer(userId, displayName, picture) {
     fashion: { owned: [] },
     signInData: {
       weekly: {
-        weekKey: getWeekStartKey(), 
-        daysSigned: [false,false,false,false,false,false,false],
-        questionsCorrect: [false,false,false,false,false,false,false],
+        weekKey: getWeekStartKey(),
+        daysSigned: [false, false, false, false, false, false, false],
+        questionsCorrect: [false, false, false, false, false, false, false],
         lastSignDate: ""
       },
       monthly: {
@@ -136,13 +136,13 @@ app.get('/player/:userId', async (req, res) => {
 
 // 新增玩家
 app.post('/player', async (req, res) => {
-    const newPlayer = req.body;
-    const existing = await users.findOne({ userId: newPlayer.userId });
-    if (existing) {
-        return res.status(400).send('Player already exists');
-    }
-    await users.insertOne(newPlayer);
-    res.json({ success: true });
+  const newPlayer = req.body;
+  const existing = await users.findOne({ userId: newPlayer.userId });
+  if (existing) {
+    return res.status(400).send('Player already exists');
+  }
+  await users.insertOne(newPlayer);
+  res.json({ success: true });
 });
 
 
@@ -181,30 +181,68 @@ app.put('/player/:userId', async (req, res) => {
 
 // 取得好友列表
 app.get('/friends/:userId', async (req, res) => {
-    const user = await users.findOne({ userId: req.params.userId });
-    if (!user) return res.status(404).json({ error: '找不到玩家' });
+  const user = await users.findOne({ userId: req.params.userId });
+  if (!user) return res.status(404).json({ error: '找不到玩家' });
 
-    const friendList = await users.find({ userId: { $in: user.friends || [] } })
-        .project({ userId: 1, displayName: 1, _id: 0 })
-        .toArray();
+  const friendList = await users.find({ userId: { $in: user.friends || [] } })
+    .project({ userId: 1, displayName: 1, _id: 0 })
+    .toArray();
 
-    res.json(friendList);
+  res.json(friendList);
 });
+
+// 取得好友公開資料
+app.get('/public/player/:userId', async (req, res) => {
+  const id = req.params.userId?.trim();
+  const doc = await users.findOne(
+    { userId: id },
+    {
+      projection: {
+        _id: 0,
+        userId: 1,
+        displayName: 1,
+        picture: 1,
+        tankEnvironment: 1,
+        tankList: 1,
+        fishList: 1,
+      }
+    }
+  );
+  if (!doc) return res.status(404).json({ error: 'not found' });
+  res.json(doc);
+});
+
 
 // 加好友
 app.post('/add-friend', async (req, res) => {
-    const { userId, friendId } = req.body;
-    await users.updateOne({ userId }, { $addToSet: { friends: friendId } });
-    await users.updateOne({ userId: friendId }, { $addToSet: { friends: userId } });
-    res.json({ message: '已加好友' });
+  const { userId, friendId } = req.body || {};
+  if (!userId || !friendId) return res.status(400).json({ error: 'missing params' });
+  if (userId === friendId) return res.status(400).json({ error: 'cannot_add_self' });
+
+
+  const me = await users.findOne({ userId });
+  const buddy = await users.findOne({ userId: friendId });
+  if (!me || !buddy) return res.status(404).json({ error: 'user_or_friend_not_found' });
+  if (me.friends && me.friends.includes(friendId)) return res.status(400).json({ error: 'already_friends' });
+
+  await users.updateOne({ userId }, { $addToSet: { friends: friendId } });
+  await users.updateOne({ userId: friendId }, { $addToSet: { friends: userId } });
+
+  // 回傳最新好友清單（顯示用）
+  const friendList = await users.find({ userId: { $in: (me.friends || []).concat([friendId]) } })
+    .project({ _id: 0, userId: 1, displayName: 1, picture: 1 })
+    .toArray();
+
+  res.json({ ok: true, friends: friendList });
 });
+
 
 // ---------------- 題庫 API ----------------
 
 // 取得所有題目
 app.get('/quiz', async (req, res) => {
-    const questions = await quiz.find().toArray();
-    res.json(questions);
+  const questions = await quiz.find().toArray();
+  res.json(questions);
 });
 
 // ---------------- LINE Auth ----------------
@@ -272,7 +310,25 @@ app.post('/auth/line', async (req, res) => {
   }
 });
 
+// DEV 專用：快速建立預設玩家（若不存在就建立）
+app.post('/dev/create/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId?.trim();
+    if (!userId) return res.status(400).json({ error: 'missing userId' });
 
+    // 你檔案裡已經有 buildDefaultPlayer(...) 可以直接用
+    const exists = await users.findOne({ userId });
+    if (exists) return res.json({ ok: true, user: exists, existed: true });
+
+    const player = buildDefaultPlayer(userId, `${userId}`, '');
+    await users.insertOne(player);
+    const fresh = await users.findOne({ userId });
+    res.json({ ok: true, user: fresh, existed: false });
+  } catch (e) {
+    console.error('[DEV create] error:', e);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
 // 啟動伺服器
 app.listen(3000, () => console.log('伺服器已啟動：http://localhost:3000'));
 

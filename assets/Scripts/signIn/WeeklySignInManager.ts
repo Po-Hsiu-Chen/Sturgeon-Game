@@ -39,8 +39,8 @@ export class WeeklySignInManager extends Component {
     private playerData: any;
 
     async start() {
-        await DataManager.ready?.catch(()=>{});
-        this.playerData = await DataManager.getPlayerData();
+        await DataManager.ready?.catch(() => { });
+        this.playerData = await DataManager.getPlayerDataCached();
 
         if (!this.playerData || !this.playerData.signInData) {
             console.warn('[WeeklySignIn] 尚未取得玩家資料，停用本元件初始化');
@@ -66,7 +66,7 @@ export class WeeklySignInManager extends Component {
 
     /** 判斷當週是否要重置簽到狀態 */
     async handleWeekReset() {
-        const currentWeekKey = getWeekStartKey(); 
+        const currentWeekKey = getWeekStartKey();
         const weekly = this.playerData.signInData.weekly || {};
         const storedWeekKey: string | undefined = weekly.weekKey;
 
@@ -79,9 +79,9 @@ export class WeeklySignInManager extends Component {
                 weekKey: currentWeekKey, // 用週一日期當鍵
                 daysSigned: [false, false, false, false, false, false, false],
                 questionsCorrect: [false, false, false, false, false, false, false],
-                lastSignDate: '' 
+                lastSignDate: ''
             };
-            await DataManager.savePlayerData(this.playerData);
+            await DataManager.savePlayerDataWithCache(this.playerData);
         }
     }
 
@@ -167,7 +167,7 @@ export class WeeklySignInManager extends Component {
             this.playerData.inventory.feeds.premium += 1;
             console.log("今日為第七天，發送一包高級飼料！");
         }
-        
+
         // 彈窗顯示獎勵
         const rewards = [
             { icon: this.getIconSpriteFrame('dragonbone'), name: '龍骨', count: finalReward }
@@ -184,7 +184,7 @@ export class WeeklySignInManager extends Component {
         this.node.getComponent(UITransform).node.parent!.addChild(popup);
 
         // 儲存 + 更新 UI + 鎖按鈕
-        await DataManager.savePlayerData(this.playerData);
+        await DataManager.savePlayerDataWithCache(this.playerData);
         this.updateSignInUI();
         this.claimButton.interactable = false;
 

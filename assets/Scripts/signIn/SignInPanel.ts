@@ -30,15 +30,15 @@ export class SignInPanel extends Component {
 
     /** 依據今日的簽到狀態，決定是否顯示面板與預設頁籤 */
     async checkIfShouldShow() {
-        await DataManager.ready?.catch(()=>{});
-        const playerData = await DataManager.getPlayerData();
+        await DataManager.ready?.catch(() => { });
+        const playerData = await DataManager.getPlayerDataCached();
 
         if (!playerData || !playerData.signInData) {
             console.warn('[簽到面板] 尚未取得玩家資料，先隱藏面板');
             this.node.active = false;
             return;
         }
-        
+
         const today = new Date().toISOString().split('T')[0];
         const weeklySigned = playerData.signInData.weekly?.lastSignDate === today;
         const monthlySigned = playerData.signInData.monthly?.lastSignDate === today;

@@ -1,6 +1,6 @@
 import { _decorator, Component, Node, Prefab, instantiate, Label, UIOpacity, Vec3, tween, Button } from 'cc';
-import { DataManager } from './DataManager';
-import { FishData } from './DataManager';
+import { DataManager, FishData } from './DataManager';
+import { playOpenPanelAnim, showFloatingTextCenter } from './utils/UIUtils';
 const { ccclass, property } = _decorator;
 
 @ccclass('TombManager')
@@ -31,7 +31,7 @@ export class TombManager extends Component {
     private confirmCallback: Function | null = null;
 
     public async init() {
-        const data = await DataManager.getPlayerData();
+        const data = await DataManager.getPlayerDataCached();
         if (!data) return;
 
         this.deadFishList = data.fishList.filter(f => f.isDead);
@@ -54,7 +54,7 @@ export class TombManager extends Component {
     }
 
     async refreshTombs() {
-        const data = await DataManager.getPlayerData();
+        const data = await DataManager.getPlayerDataCached();
         this.deadFishList = data.fishList.filter(f => f.isDead);
 
         this.tombContainer.removeAllChildren();
@@ -74,9 +74,9 @@ export class TombManager extends Component {
     }
 
     async showDeadFishDetail(fish: FishData) {
-        this.deadFishDetailPanel.active = true;
+        playOpenPanelAnim(this.deadFishDetailPanel);
 
-        const data = await DataManager.getPlayerData();
+        const data = await DataManager.getPlayerDataCached();
         const reviveCount = data.inventory.items.revivePotion;
         this.reviveCountLabel.string = `${reviveCount}`;
         this.reviveBtn.getComponent(Button)!.interactable = reviveCount > 0;
@@ -107,7 +107,7 @@ export class TombManager extends Component {
     }
 
     async reviveFish(fish: FishData) {
-        const data = await DataManager.getPlayerData();
+        const data = await DataManager.getPlayerDataCached();
         if (data.inventory.items.revivePotion <= 0) {
             console.warn("沒有復活藥");
             return;
@@ -121,9 +121,9 @@ export class TombManager extends Component {
         data.fishList[index].emotion = 'happy';
         data.fishList[index].hunger = 50;
 
-        await DataManager.savePlayerData(data);
+        await DataManager.savePlayerDataWithCache(data);
         console.log(`${fish.name} 已復活`);
-        this.showFloatingTextCenter(`${fish.name} 已復活，快去 ${fish.tankId} 號魚缸看看牠吧！`);
+        showFloatingTextCenter(this.floatingNode, `${fish.name} 已復活，快去 ${fish.tankId} 號魚缸看看牠吧！`);
 
         this.deadFishDetailPanel.active = false;
         this.refreshTombs();
@@ -131,7 +131,7 @@ export class TombManager extends Component {
     }
 
     async resetFish(fish: FishData) {
-        const data = await DataManager.getPlayerData();
+        const data = await DataManager.getPlayerDataCached();
         const index = data.fishList.findIndex(f => f.id === fish.id);
         if (index === -1) return;
 
@@ -141,9 +141,9 @@ export class TombManager extends Component {
         data.fishList[index].growthDaysPassed = 0;
         data.fishList[index].hunger = 50;
 
-        await DataManager.savePlayerData(data);
+        await DataManager.savePlayerDataWithCache(data);
         console.log(`${fish.name} 已重新開始養殖`);
-        this.showFloatingTextCenter(`${fish.name} 已重新開始，快去 ${fish.tankId} 號魚缸看看牠吧！`);
+        showFloatingTextCenter(this.floatingNode, `${fish.name} 已重新開始，快去 ${fish.tankId} 號魚缸看看牠吧！`);
 
         this.deadFishDetailPanel.active = false;
         this.refreshTombs();
@@ -155,43 +155,4 @@ export class TombManager extends Component {
         this.confirmDialogPanel.active = true;
         this.confirmCallback = onConfirm;
     }
-
-    showFloatingTextCenter(text: string) {
-        const node = this.floatingNode;
-        const label = node.getComponentInChildren(Label);
-        const uiOpacity = node.getComponent(UIOpacity);
-
-        if (!label || !uiOpacity) {
-            console.warn('floatingNode 缺少 Label 或 UIOpacity 元件');
-            return;
-        }
-
-        // 若之前的動畫未結束，先停止
-        tween(node).stop();
-        tween(uiOpacity).stop();
-
-        label.string = text;
-        node.active = true;
-        uiOpacity.opacity = 0;
-
-        // 初始與目標位置
-        const startPos = new Vec3(0, 0, 0);
-        const endPos = new Vec3(0, 30, 0);
-
-        node.setPosition(startPos);
-
-        // 動畫：淡入、停留、淡出
-        tween(uiOpacity)
-            .to(0.3, { opacity: 255 })    // 淡入
-            .delay(2.5)                   // 停留
-            .to(0.4, { opacity: 0 })      // 淡出
-            .call(() => node.active = false)
-            .start();
-
-        // 動畫：向上漂浮
-        tween(node)
-            .to(1.5, { position: endPos }, { easing: 'quadOut' })
-            .start();
-    }
-
 }

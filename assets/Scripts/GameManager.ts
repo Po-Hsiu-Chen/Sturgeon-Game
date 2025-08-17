@@ -5,6 +5,7 @@ import { FishLogic } from './FishLogic';
 import { TombManager } from './TombManager';
 import { TankEnvironmentManager } from './TankEnvironmentManager';
 import { getOrCreateUserId } from './utils/utils';
+import { showFloatingTextCenter } from './utils/UIUtils';
 import { initLiff, getIdentity } from './bridge/LiffBridge';
 import { authWithLine } from './api/Api';
 const { ccclass, property } = _decorator;
@@ -71,13 +72,18 @@ export class GameManager extends Component {
         // 檢查是否要強制 dev 模式（例如網址帶 ?dev=1）
         const urlParams = new URLSearchParams(window.location.search);
         const forceDev = urlParams.get('dev') === '1';
+        const devUid = urlParams.get('uid') || 'DEV_LOCAL';;
 
         try {
             if (forceDev) {
                 console.warn('[Game] 強制 DEV 模式');
-                DataManager.useLocalStorage = true;
-                await DataManager.init('DEV_LOCAL');
-                this.playerData = await DataManager.getPlayerData();
+                // 重要：本機測試要走資料庫，不要寫 localStorage
+                DataManager.useLocalStorage = false;
+                // 指向本機後端
+                DataManager.apiBase = 'http://localhost:3000';
+
+                await DataManager.init(devUid);
+                this.playerData = await DataManager.getPlayerDataCached();
             } else {
                 // === 正常 LIFF 登入流程 ===
                 await initLiff(LIFF_ID);
@@ -89,7 +95,7 @@ export class GameManager extends Component {
                 const { lineUserId } = await authWithLine(idToken);
 
                 await DataManager.init(lineUserId);
-                this.playerData = await DataManager.getPlayerData();
+                this.playerData = await DataManager.getPlayerDataCached();
             }
         } catch (e) {
             console.error('[Game] 啟動失敗，錯誤：', e);
@@ -117,7 +123,7 @@ export class GameManager extends Component {
 
 
         // await DataManager.init(this.userId); 
-        // this.playerData = await DataManager.getPlayerData();
+        // this.playerData = await DataManager.getPlayerDataCached();
         // if (!this.playerData) {
         //     console.error('玩家資料讀取失敗');
         //     return;
@@ -189,7 +195,7 @@ export class GameManager extends Component {
     }
 
     async switchTank(tankId: number) {
-        this.playerData = await DataManager.getPlayerData(); 
+        this.playerData = await DataManager.getPlayerDataCached(); 
         this.tankNodes.forEach((node, idx) => {
             node.active = (idx + 1) === tankId;
         });
@@ -351,7 +357,7 @@ export class GameManager extends Component {
         // 更新記錄的時間
         this.playerData.lastLoginDate = today;
         this.playerData.lastLoginTime = now.toISOString();
-        await DataManager.savePlayerData(this.playerData);
+        await DataManager.savePlayerDataWithCache(this.playerData);
 
         await this.refreshEnvironmentUI();
         console.log(`更新完成：經過 ${hoursPassed.toFixed(2)} 小時，飢餓與成長資料已更新`);
@@ -486,15 +492,15 @@ export class GameManager extends Component {
         const env = this.playerData.tankEnvironment;
 
         if (items.heater <= 0) {
-            this.showFloatingTextCenter('加熱器不足');
+            showFloatingTextCenter(this.floatingNode, '加熱器不足');
             return;
         }
         if (env.temperature >= this.minComfortTemp && env.temperature <= this.maxComfortTemp) {
-            this.showFloatingTextCenter('目前水溫正常，無需使用加熱器');
+            showFloatingTextCenter(this.floatingNode, '目前水溫正常，無需使用加熱器');
             return;
         }
         if (env.temperature > this.maxComfortTemp) {
-            this.showFloatingTextCenter('目前為高溫狀態，請使用風扇');
+            showFloatingTextCenter(this.floatingNode, '目前為高溫狀態，請使用風扇');
             return;
         }
         this.showConfirmDialog('確定要使用加熱器嗎？', () => this.useHeater());
@@ -506,21 +512,21 @@ export class GameManager extends Component {
         const env = this.playerData.tankEnvironment;
 
         if (items.heater <= 0) {
-            this.showFloatingTextCenter('加熱器不足');
+            showFloatingTextCenter(this.floatingNode, '加熱器不足');
             return;
         }
         // 再次保險檢查
         if (env.temperature >= this.minComfortTemp) {
-            this.showFloatingTextCenter('目前水溫不低，不需使用加熱器');
+            showFloatingTextCenter(this.floatingNode, '目前水溫不低，不需使用加熱器');
             return;
         }
 
         items.heater -= 1;
         TankEnvironmentManager.adjustTemperature(this.playerData);
 
-        await DataManager.savePlayerData(this.playerData);
+        await DataManager.savePlayerDataWithCache(this.playerData);
         await this.refreshEnvironmentUI();
-        this.showFloatingTextCenter('已使用加熱器');
+        showFloatingTextCenter(this.floatingNode, '已使用加熱器');
     }
 
     /** 使用風扇（點擊） */
@@ -529,15 +535,15 @@ export class GameManager extends Component {
         const env = this.playerData.tankEnvironment;
 
         if (items.fan <= 0) {
-            this.showFloatingTextCenter('風扇不足');
+            showFloatingTextCenter(this.floatingNode, '風扇不足');
             return;
         }
         if (env.temperature >= this.minComfortTemp && env.temperature <= this.maxComfortTemp) {
-            this.showFloatingTextCenter('目前水溫正常，無需使用風扇');
+            showFloatingTextCenter(this.floatingNode, '目前水溫正常，無需使用風扇');
             return;
         }
         if (env.temperature < this.minComfortTemp) {
-            this.showFloatingTextCenter('目前為低溫狀態，請使用加熱器');
+            showFloatingTextCenter(this.floatingNode, '目前為低溫狀態，請使用加熱器');
             return;
         }
         this.showConfirmDialog('確定要使用風扇嗎？', () => this.useFan());
@@ -549,21 +555,21 @@ export class GameManager extends Component {
         const env = this.playerData.tankEnvironment;
 
         if (items.fan <= 0) {
-            this.showFloatingTextCenter('風扇不足');
+            showFloatingTextCenter(this.floatingNode, '風扇不足');
             return;
         }
         // 再次保險檢查
         if (env.temperature <= this.maxComfortTemp) {
-            this.showFloatingTextCenter('目前水溫不高，不需使用風扇');
+            showFloatingTextCenter(this.floatingNode, '目前水溫不高，不需使用風扇');
             return;
         }
 
         items.fan -= 1;
         TankEnvironmentManager.adjustTemperature(this.playerData);
 
-        await DataManager.savePlayerData(this.playerData);
+        await DataManager.savePlayerDataWithCache(this.playerData);
         await this.refreshEnvironmentUI();
-        this.showFloatingTextCenter('已使用風扇');
+        showFloatingTextCenter(this.floatingNode, '已使用風扇');
     }
 
     /** 使用魚缸刷（點擊） */
@@ -572,11 +578,11 @@ export class GameManager extends Component {
         const env = this.playerData.tankEnvironment;
 
         if (items.brush <= 0) {
-            this.showFloatingTextCenter('魚缸刷不足');
+            showFloatingTextCenter(this.floatingNode, '魚缸刷不足');
             return;
         }
         if (env.waterQualityStatus === "clean") {
-            this.showFloatingTextCenter('目前魚缸很乾淨，無需使用魚缸刷');
+            showFloatingTextCenter(this.floatingNode, '目前魚缸很乾淨，無需使用魚缸刷');
             return;
         }
 
@@ -588,15 +594,15 @@ export class GameManager extends Component {
         const items = this.playerData.inventory.items;
 
         if (items.brush <= 0) {
-            this.showFloatingTextCenter('魚缸刷不足');
+            showFloatingTextCenter(this.floatingNode, '魚缸刷不足');
             return;
         }
         items.brush -= 1;
         TankEnvironmentManager.cleanWater(this.playerData);
 
-        await DataManager.savePlayerData(this.playerData);
+        await DataManager.savePlayerDataWithCache(this.playerData);
         await this.refreshEnvironmentUI();
-        this.showFloatingTextCenter('已清潔魚缸');
+        showFloatingTextCenter(this.floatingNode, '已清潔魚缸');
     }
 
     private updateEnvironmentOverlays(env: any) {
@@ -609,47 +615,18 @@ export class GameManager extends Component {
         if (this.hotOverlay)  this.hotOverlay.active  = !isDirty && tooHot;  // 髒水優先
     }
 
-    showFloatingTextCenter(text: string) {
-        const node = this.floatingNode;
-        const label = node?.getComponentInChildren(Label);
-        const uiOpacity = node?.getComponent(UIOpacity);
-
-        if (!node || !label || !uiOpacity) {
-            console.warn('floatingNode 缺少 Node / Label / UIOpacity 元件');
-            return;
-        }
-
-        // 停掉先前動畫
-        tween(node).stop();
-        tween(uiOpacity).stop();
-
-        label.string = text;
-        node.active = true;
-        uiOpacity.opacity = 0;
-
-        const startPos = new Vec3(0, 0, 0);
-        const endPos = new Vec3(0, 30, 0);
-
-        node.setPosition(startPos);
-
-        // 淡入 -> 停留 -> 淡出
-        tween(uiOpacity)
-            .to(0.3, { opacity: 255 })
-            .delay(1.2) // 道具提示可比墓園短一點
-            .to(0.4, { opacity: 0 })
-            .call(() => node.active = false)
-            .start();
-
-        // 上浮位移
-        tween(node)
-            .to(1.2, { position: endPos }, { easing: 'quadOut' })
-            .start();
-    }
-
     private showConfirmDialog(message: string, onConfirm: Function) {
         if (!this.confirmDialogPanel || !this.confirmDialogText) return;
         this.confirmDialogText.string = message;
         this.confirmCallback = onConfirm;
         this.confirmDialogPanel.active = true;
     }
+
+    public showFriendTank(friendData: {
+        userId:string, displayName?:string,
+        tankEnvironment:any, tankList:any[], fishList:any[]
+    }) {
+
+    }
+
 }

@@ -120,13 +120,13 @@ export class DataManager {
     static _snapshot: PlayerData | null = null;
     static _snapshotTime = 0;
     static _inFlight: Promise<PlayerData | null> | null = null;
-    static _listeners = new Set<(p: PlayerData)=>void>();
+    static _listeners = new Set<(p: PlayerData) => void>();
 
-    static onChange(cb: (p: PlayerData)=>void) {
+    static onChange(cb: (p: PlayerData) => void) {
         this._listeners.add(cb);
         return () => this._listeners.delete(cb);
-        }
-        static _emit(p: PlayerData) {
+    }
+    static _emit(p: PlayerData) {
         for (const cb of this._listeners) cb(p);
     }
 
@@ -157,7 +157,7 @@ export class DataManager {
     static async getPlayerData(userId?: string): Promise<PlayerData | null> {
         // 只有「不是初始化中」才等待 ready，避免死鎖
         if (this.ready && !this.initializing) {
-            try { await this.ready; } catch {}
+            try { await this.ready; } catch { }
         }
 
         const fallbackId = (typeof window !== 'undefined') ? localStorage.getItem('currentUserId') : null;
@@ -171,9 +171,9 @@ export class DataManager {
         try {
             const res = await fetch(`${this.apiBase}/player/${encodeURIComponent(id)}`);
             if (!res.ok) {
-            if (res.status === 404) return null;
-            console.error(`取得玩家資料失敗: ${res.status} ${await res.text()}`);
-            return null;
+                if (res.status === 404) return null;
+                console.error(`取得玩家資料失敗: ${res.status} ${await res.text()}`);
+                return null;
             }
             return await res.json();
         } catch (e) {
@@ -259,6 +259,43 @@ export class DataManager {
         this._snapshotTime = Date.now();
         this._emit(fresh);
         return fresh;
+    }
+
+    // 取得我的好友清單（簡略資料）
+    static async getFriends(): Promise<Array<{ userId: string, displayName?: string, picture?: string }>> {
+        const id = this.currentUserId;
+        if (!id) return [];
+        const res = await fetch(`${this.apiBase}/friends/${encodeURIComponent(id)}`);
+        if (!res.ok) return [];
+        return await res.json();
+    }
+
+    // 加好友（手動輸入 friendId）
+    static async addFriend(friendId: string): Promise<Array<{ userId: string, displayName?: string, picture?: string }>> {
+        const id = this.currentUserId;
+        if (!id) throw new Error('no current user');
+        const res = await fetch(`${this.apiBase}/add-friend`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: id, friendId })
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            const error = new Error(err?.error || 'addFriend failed');
+            (error as any).code = err?.error; // 把錯誤碼塞進去
+            throw error;
+        }
+
+        const data = await res.json(); // { ok, friends }
+        return data.friends; // 保證回傳的是「好友陣列」
+    }
+
+    // 取得好友公開的玩家資料（用來顯示魚缸）
+    static async getPublicPlayerData(friendUserId: string) {
+        const res = await fetch(`${this.apiBase}/public/player/${encodeURIComponent(friendUserId)}`);
+        if (!res.ok) throw new Error(await res.text());
+        return await res.json(); // 僅含 fishList, tankList, tankEnvironment, displayName...
     }
 
 }

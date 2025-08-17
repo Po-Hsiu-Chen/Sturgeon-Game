@@ -23,12 +23,12 @@ export class SwimmingFish extends Component {
     static setEmotionFrames(map: Record<string, SpriteFrame>) {
         this._emotionFrames = map || {};
     }
-    static getEmotionSpriteByKey(key: "happy"|"sad"|"angry"|"hungry"|"cold"|"hot"|"sick"): SpriteFrame | null {
+    static getEmotionSpriteByKey(key: "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "sick"): SpriteFrame | null {
         return this._emotionFrames[key] ?? this._emotionFrames["happy"] ?? null;
     }
 
     // Emotion Cache
-    private _lastEmotion: "happy"|"sad"|"angry"|"hungry"|"cold"|"hot"|"sick" | null = null;
+    private _lastEmotion: "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "sick" | null = null;
     private _lastEmotionSprite: SpriteFrame | null = null;
 
     start() {
@@ -157,13 +157,13 @@ export class SwimmingFish extends Component {
 
     /** 依優先序決定情緒：sick > cold/hot > hungry(>=80) > 隨機(happy|sad|angry) */
     static computeEmotion(fish: FishData, env: any):
-    "happy"|"sad"|"angry"|"hungry"|"cold"|"hot"|"sick" {
+        "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "sick" {
         if (fish.status?.sick) return "sick";
         const minComfort = 18, maxComfort = 23;
         if (env?.temperature < minComfort) return "cold";
         if (env?.temperature > maxComfort) return "hot";
         if ((fish.hunger ?? 0) >= 80) return "hungry";
-        const pool = ["happy","sad","angry"] as const;
+        const pool = ["happy", "sad", "angry"] as const;
         return pool[Math.floor(Math.random() * pool.length)];
     }
 

@@ -56,7 +56,7 @@ export class FishLogic {
 
         items.genderPotion--;
         fish.gender = fish.gender === "male" ? "female" : "male";
-        
+
         return `${fish.name} 的性別已變更為 ${fish.gender === 'male' ? '公' : '母'}`;
     }
 

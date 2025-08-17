@@ -3,6 +3,7 @@ import { SwimmingFish } from './SwimmingFish';
 import { FishLogic } from './FishLogic';
 import { GameManager } from './GameManager';
 import { DataManager, FishData } from './DataManager';
+import { playOpenPanelAnim } from './utils/UIUtils';
 const { ccclass, property } = _decorator;
 
 @ccclass('FishDetailManager')
@@ -18,7 +19,7 @@ export class FishDetailManager extends Component {
     @property(Label) hungerLabel: Label = null!;
     @property(Sprite) fishStatusImage: Sprite = null!;
     @property(Label) floatingText: Label = null!;
-    
+
     // Fashion 相關
     @property(Node) fashionSection: Node = null!;
     @property(Node) fashionTabButton: Node = null!;
@@ -71,13 +72,13 @@ export class FishDetailManager extends Component {
     /** 初始化 */
     start() {
         SwimmingFish.setEmotionFrames({
-            happy:  this.happySprite,
-            sad:    this.sadSprite,
-            angry:  this.angrySprite,
+            happy: this.happySprite,
+            sad: this.sadSprite,
+            angry: this.angrySprite,
             hungry: this.hungrySprite,
-            cold:   this.coldSprite,
-            hot:    this.hotSprite,
-            sick:   this.sickSprite,
+            cold: this.coldSprite,
+            hot: this.hotSprite,
+            sick: this.sickSprite,
         });
 
         this.closeButton.on(Node.EventType.TOUCH_END, this.closeFishDetail, this);
@@ -111,17 +112,7 @@ export class FishDetailManager extends Component {
 
     /** 顯示魚詳細資訊 */
     async showFishDetail(fish: FishData, emotionSprite?: SpriteFrame | null) {
-        const wasInactive = !this.fishDetailPanel.active;
-
-        if (wasInactive) {
-            this.fishDetailPanel.active = true;
-            this.fishDetailPanel.scale = new Vec3(0.3, 0.3, 1);
-
-            tween(this.fishDetailPanel)
-                .to(0.3, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' })
-                .start();
-        }
-
+        playOpenPanelAnim(this.fishDetailPanel);
         this.currentFishId = fish.id;
         this.switchTab('feed'); // 預設顯示餵食面板
 
@@ -131,7 +122,7 @@ export class FishDetailManager extends Component {
         this.daysLabel.string = `已成長天數：${fish.growthDaysPassed}`;
         this.stageLabel.string = `LV ${fish.stage}`;
         this.hungerLabel.string = `飢餓值：${Math.floor(fish.hunger)} / 100`;
-        
+
         // 剩餘數量顯示
         const playerData = await DataManager.getPlayerDataCached();
         this.feedNormalCountLabel.string = playerData.inventory.feeds.normal.toString();
@@ -150,12 +141,12 @@ export class FishDetailManager extends Component {
         if (emotionSprite) {
             this.fishStatusImage.spriteFrame = emotionSprite;
         } else {
-            const currentEmotion = fish.emotion as any; 
+            const currentEmotion = fish.emotion as any;
             if (currentEmotion) {
                 const sf = SwimmingFish.getEmotionSpriteByKey(currentEmotion);
                 this.fishStatusImage.spriteFrame = sf;
             } else {
-                const env = playerData.tankEnvironment; 
+                const env = playerData.tankEnvironment;
                 const computed = SwimmingFish.computeEmotion(fish, env);
                 const sf = SwimmingFish.getEmotionSpriteByKey(computed);
                 this.fishStatusImage.spriteFrame = sf;
@@ -175,7 +166,7 @@ export class FishDetailManager extends Component {
         const playerData = await DataManager.getPlayerDataCached();
         const fish = playerData.fishList.find(f => f.id === this.currentFishId);
         if (!fish) return;
-        
+
         // 飢餓值為 0：禁止餵食
         if (fish.hunger <= 0) {
             this.showFloatingTextRightOf(this.hungerLabel.node, '已飽，無需餵食');
@@ -184,7 +175,7 @@ export class FishDetailManager extends Component {
 
         const msg = FishLogic.feed(fish, playerData.inventory, amount, type);
         console.log(msg);
-        await DataManager.savePlayerData(playerData);
+        await DataManager.savePlayerDataWithCache(playerData);
         this.showFishDetail(fish);
 
         this.showFloatingTextRightOf(this.hungerLabel.node, `餵食 -${amount}`);
@@ -208,7 +199,7 @@ export class FishDetailManager extends Component {
             return;
         }
 
-        await DataManager.savePlayerData(playerData);
+        await DataManager.savePlayerDataWithCache(playerData);
         this.hideRenamePanel();
         this.showFishDetail(fish);
     }
@@ -245,13 +236,13 @@ export class FishDetailManager extends Component {
         if (!fish) return;
 
         const msg = FishLogic.useGenderPotion(fish, playerData.inventory.items);
-        await DataManager.savePlayerData(playerData);
+        await DataManager.savePlayerDataWithCache(playerData);
         console.log(msg);
         this.showFishDetail(fish); // 更新畫面
 
         this.showFloatingTextRightOf(this.genderLabel.node, '變性完成！');
 
-        const gameManager = this.node.scene.getComponentInChildren(GameManager); 
+        const gameManager = this.node.scene.getComponentInChildren(GameManager);
         if (gameManager) {
             gameManager.replaceFishNode(fish);  // 根據新性別產生對應 prefab
         }
@@ -267,14 +258,14 @@ export class FishDetailManager extends Component {
         if (!fish) return;
 
         const { message, upgraded } = FishLogic.useUpgradePotion(fish, playerData.inventory.items);
-        await DataManager.savePlayerData(playerData);
+        await DataManager.savePlayerDataWithCache(playerData);
         console.log(message);
 
         await this.showFishDetail(fish); // 更新資訊
         this.showFloatingTextRightOf(this.daysLabel.node, '成長天數 +5');
 
         if (upgraded) {
-            const gameManager = this.node.scene.getComponentInChildren(GameManager); 
+            const gameManager = this.node.scene.getComponentInChildren(GameManager);
             if (gameManager) {
                 gameManager.replaceFishNode(fish);  // 替換模型
             }
@@ -291,7 +282,7 @@ export class FishDetailManager extends Component {
         if (!fish) return;
 
         const { message, cured } = FishLogic.useColdMedicine(fish, playerData.inventory.items);
-        await DataManager.savePlayerData(playerData);
+        await DataManager.savePlayerDataWithCache(playerData);
         console.log(message);
 
         if (cured) {
@@ -353,10 +344,10 @@ export class FishDetailManager extends Component {
         this.RenamePanel.active = false;
         // 之後所有需要關起來的 panel
     }
-    
+
     closeFishDetail() {
         this.fishDetailPanel.active = false;
-        this.hideAllSubPanels(); 
+        this.hideAllSubPanels();
         SwimmingFish.clearSelection();
     }
 
@@ -378,5 +369,5 @@ export class FishDetailManager extends Component {
         this.confirmDialogPanel.active = true;
         this.confirmCallback = onConfirm;
     }
-    
+
 }

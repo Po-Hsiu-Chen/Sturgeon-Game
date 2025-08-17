@@ -29,8 +29,8 @@ export class MonthlySignInManager extends Component {
     private playerData: any;
 
     async start() {
-        await DataManager.ready?.catch(()=>{});
-        this.playerData = await DataManager.getPlayerData();
+        await DataManager.ready?.catch(() => { });
+        this.playerData = await DataManager.getPlayerDataCached();
 
         if (!this.playerData || !this.playerData.signInData) {
             console.warn('[MonthlySignIn] 尚未取得玩家資料，停用本元件初始化');
@@ -113,7 +113,7 @@ export class MonthlySignInManager extends Component {
         } else if (key === 'premiumFeed') {
             inv.feeds.premium += count;
 
-        // 道具類（items）
+            // 道具類（items）
         } else if (key in inv.items) {
             inv.items[key] += count;
 
@@ -183,7 +183,7 @@ export class MonthlySignInManager extends Component {
             console.log(`月簽到獎勵：${r.name} x${r.count}`);
         });
 
-        await DataManager.savePlayerData(this.playerData);
+        await DataManager.savePlayerDataWithCache(this.playerData);
 
         this.claimButton.interactable = false;
         this.signInHintLabel.string = "今日已簽到";
