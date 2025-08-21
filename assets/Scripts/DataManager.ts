@@ -7,10 +7,10 @@ const { ccclass, property } = _decorator;
 
 /** 魚的即時狀態 */
 interface FishStatus {
-    hungry: boolean;
-    hot: boolean;
-    cold: boolean;
-    sick: boolean;
+    hungry: boolean;   // 是否飢餓
+    hot: boolean;      // 是否太熱
+    cold: boolean;     // 是否太冷
+    sick: boolean;     // 是否生病
 }
 
 /** 時裝 */
@@ -19,7 +19,7 @@ interface FishOutfit {
     accessories: string[];       // 其他
 }
 
-/** 魚本身 */
+/** 魚的完整資料 */
 export interface FishData {
     id: number;                          // 魚 ID
     name: string;                        // 名字
@@ -40,7 +40,7 @@ export interface FishData {
     tankId: number;                      // 所在魚缸
 }
 
-/** 共用魚缸環境 */
+/** 魚缸環境狀態 */
 interface TankEnvironment {
     temperature: number;                    // 當前水溫（°C）
     lastTempUpdateTime: string;             // 上次更新水溫的時間
@@ -59,16 +59,16 @@ interface TankData {
     fishIds: number[];      // 此魚缸內的魚 ID 陣列
 }
 
-/** 玩家 */
+/** 玩家資料 */
 export interface PlayerData {
-    userId: string;                // 玩家 ID
-    displayName: string;           // 玩家名稱
-    picture: string;               // 玩家頭貼
-    dragonBones: number;           // 遊戲貨幣（龍骨）
-    lastLoginDate: string;         // 上次登入日期（升級用）
-    lastLoginTime: string;         // 用來計算小時差（飢餓值用）
-    fishList: FishData[];          // 擁有的魚列表
-    tankList: TankData[];          // 擁有的魚缸列表
+    userId: string;                    // 玩家 ID
+    displayName: string;               // 玩家名稱
+    picture: string;                   // 玩家頭貼
+    dragonBones: number;               // 遊戲貨幣（龍骨）
+    lastLoginDate: string;             // 上次登入日期（升級用）
+    lastLoginTime: string;             // 用來計算小時差（飢餓值用）
+    fishList: FishData[];              // 擁有的魚列表
+    tankList: TankData[];              // 擁有的魚缸列表
     tankEnvironment: TankEnvironment;  // 魚缸環境狀態
     inventory: {
         feeds: {
@@ -105,46 +105,92 @@ export interface PlayerData {
     };
 }
 
+/** 簽到題目 */
 export interface QuizQuestion {
-    question: string;
-    options: string[];
-    answerIndex: number; // 正確答案在 options 陣列中的位置
+    question: string;      // 題目
+    options: string[];     // 選項
+    answerIndex: number;   // 正確答案索引
+}
+
+/** 好友資料 */
+export interface FriendSummary {
+    userId: string;
+    displayName?: string;
+    picture?: string;
+}
+
+export type FriendRequestStatus = 'pending' | 'accepted' | 'declined' | 'canceled' | 'expired';
+
+/** 好友邀請資料 */
+export interface FriendRequest {
+    requestId: string;
+    fromUserId: string;
+    toUserId: string;
+    createdAt: string;            // 邀請建立時間
+    status: FriendRequestStatus;  // 狀態
+    fromUser?: FriendSummary;     // 發送者
+    toUser?: FriendSummary;       // 接收者
+}
+
+/** 郵件類型 */
+export type MailType = 'FRIEND_REQUEST' | 'SYSTEM' | 'REWARD' | 'NOTICE';
+/** 郵件狀態 */
+export type MailStatus = 'unread' | 'read' | 'archived';
+
+/** 郵件內容 */
+export interface MailItem {
+    mailId: string;
+    type: MailType;
+    createdAt: string;
+    status: MailStatus;
+    title?: string;   // 標題
+    body?: string;    // 內容
+    fromUser?: { userId: string; displayName?: string; picture?: string };
+    payload?: {       // 額外資料
+        requestId?: string;
+        fromUserId?: string;
+    };
 }
 
 export class DataManager {
-    static useLocalStorage = false;
-    static apiBase = '';
-    static currentUserId: string | null = null; // 記住當前登入玩家 ID
-    static ready: Promise<void> | null = null;
+    static useLocalStorage = false;            
+    static apiBase = '';                        // API 伺服器 URL
+    static currentUserId: string | null = null; // 當前登入的玩家 ID
+    static ready: Promise<void> | null = null;  // 初始化完成後的 Promise
     static readyResolve: (() => void) | null = null;
-    static initializing = false;
+    static initializing = false;                // 是否正在初始化
 
-    static _snapshot: PlayerData | null = null;
-    static _snapshotTime = 0;
-    static _inFlight: Promise<PlayerData | null> | null = null;
-    static _listeners = new Set<(p: PlayerData) => void>();
+    // 快取相關
+    static _snapshot: PlayerData | null = null;                  // 快取玩家資料
+    static _snapshotTime = 0;                                    // 快取時間戳
+    static _inFlight: Promise<PlayerData | null> | null = null;  // 進行中的請求
+    static _listeners = new Set<(p: PlayerData) => void>();      // 資料更新監聽者
 
     static onChange(cb: (p: PlayerData) => void) {
         this._listeners.add(cb);
         return () => this._listeners.delete(cb);
     }
+
+    /** 觸發資料更新事件 */
     static _emit(p: PlayerData) {
         for (const cb of this._listeners) cb(p);
     }
 
+    /** 確保玩家資料存在 */
     static async ensureInitialized(userId: string) {
         this.setCurrentUser(userId);
-        // 檢查後端是否存在（/auth/line 會負責建），找不到就讓上層決定怎麼處理
         const existing = await this.getPlayerData(userId);
         if (!existing) {
             console.error('[DataManager] 後端沒有這個玩家，請重新登入 LINE');
         }
     }
 
+    /** 設定當前玩家 ID */
     static setCurrentUser(id: string) {
         this.currentUserId = id;
     }
 
+    /** 初始化玩家資料 */
     static async init(userId: string) {
         if (!this.ready) {
             this.ready = new Promise<void>(res => (this.readyResolve = res));
@@ -156,8 +202,9 @@ export class DataManager {
         this.readyResolve?.();             // resolve，喚醒其他等待者
     }
 
+    /** 取得玩家資料 */
     static async getPlayerData(userId?: string): Promise<PlayerData | null> {
-        // 只有「不是初始化中」才等待 ready，避免死鎖
+        // 如果初始化還沒完成，等待 ready
         if (this.ready && !this.initializing) {
             try { await this.ready; } catch { }
         }
@@ -184,6 +231,7 @@ export class DataManager {
         }
     }
 
+    /** 儲存玩家資料 */
     static async savePlayerData(data: PlayerData): Promise<PlayerData> {
         if (this.useLocalStorage) {
             localStorage.setItem('playerData', JSON.stringify(data));
@@ -203,6 +251,7 @@ export class DataManager {
         return fresh;
     }
 
+    /** 取得簽到題目 */
     static async getQuizQuestions(): Promise<QuizQuestion[]> {
         if (this.useLocalStorage) {
             return quizQuestions;
@@ -220,7 +269,7 @@ export class DataManager {
         }
     }
 
-    // -------- 快取機制 --------
+    /** 取得快取的玩家資料，必要時會重新抓取 */
     static async getPlayerDataCached(opts?: { maxAgeMs?: number, refresh?: boolean, userId?: string }): Promise<PlayerData | null> {
         const maxAge = opts?.maxAgeMs ?? 3000; // 預設快取 3 秒
         const now = Date.now();
@@ -243,7 +292,7 @@ export class DataManager {
             if (fresh) {
                 this._snapshot = fresh;
                 this._snapshotTime = Date.now();
-                this._emit(fresh); // 廣播給訂閱者
+                this._emit(fresh); // 通知訂閱者
             }
             return fresh;
         })();
@@ -251,10 +300,12 @@ export class DataManager {
         return this._inFlight;
     }
 
+    /** 強制刷新玩家資料 */
     static async refreshPlayerData(userId?: string) {
         return this.getPlayerDataCached({ refresh: true, userId });
     }
 
+    /** 儲存資料並更新快取 */
     static async savePlayerDataWithCache(data: PlayerData): Promise<PlayerData> {
         const fresh = await this.savePlayerData(data);
         this._snapshot = fresh;
@@ -263,7 +314,7 @@ export class DataManager {
         return fresh;
     }
 
-    // 取得我的好友清單（簡略資料）
+    /** 取得好友列表 */
     static async getFriends(): Promise<Array<{ userId: string, displayName?: string, picture?: string }>> {
         const id = this.currentUserId;
         if (!id) return [];
@@ -272,28 +323,90 @@ export class DataManager {
         return await res.json();
     }
 
-    // 加好友（手動輸入 friendId）
-    static async addFriend(friendId: string): Promise<Array<{ userId: string, displayName?: string, picture?: string }>> {
+    /** 發送好友邀請 */
+    static async sendFriendRequest(friendId: string): Promise<{ request: FriendRequest }> {
         const id = this.currentUserId;
         if (!id) throw new Error('no current user');
-        const res = await fetch(`${this.apiBase}/add-friend`, {
+        const res = await fetch(`${this.apiBase}/friend-requests`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: id, friendId })
+            body: JSON.stringify({ fromUserId: id, toUserId: friendId })
         });
-
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            const error = new Error(err?.error || 'addFriend failed');
-            (error as any).code = err?.error; // 把錯誤碼塞進去
+            const error = new Error(err?.error || 'sendFriendRequest failed');
+            (error as any).code = err?.error; // 錯誤碼
             throw error;
         }
-
-        const data = await res.json(); // { ok, friends }
-        return data.friends; // 保證回傳的是「好友陣列」
+        return await res.json(); // { request }
     }
 
-    // 取得好友公開的玩家資料（用來顯示魚缸）
+    /** 取得好友邀請清單 */
+    static async getFriendRequests(): Promise<{ incoming: FriendRequest[], outgoing: FriendRequest[] }> {
+        const id = this.currentUserId;
+        if (!id) throw new Error('no current user');
+        const res = await fetch(`${this.apiBase}/friend-requests?userId=${encodeURIComponent(id)}`);
+        if (!res.ok) throw new Error(`getFriendRequests failed: ${res.status}`);
+        return await res.json(); // { incoming, outgoing }
+    }
+
+     /** 取得收件匣 */
+    static async getInbox(): Promise<MailItem[]> {
+        const id = this.currentUserId;
+        if (!id) throw new Error('no current user');
+        const res = await fetch(`${this.apiBase}/mail/inbox?userId=${encodeURIComponent(id)}`);
+        if (!res.ok) throw new Error(`getInbox failed: ${res.status}`);
+        return await res.json(); // MailItem[]
+    }
+
+    /** 將郵件標記為已讀 */
+    static async markMailRead(mailId: string): Promise<{ ok: boolean }> {
+        const id = this.currentUserId;
+        if (!id) throw new Error('no current user');
+        const res = await fetch(`${this.apiBase}/mail/mark-read`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: id, mailId })
+        });
+        if (!res.ok) throw new Error('markMailRead failed');
+        return await res.json();
+    }
+
+    /** 回覆好友邀請（接受 / 拒絕） */
+    static async respondFriendRequest(requestId: string, action: 'accept' | 'decline'): Promise<{ ok: boolean }> {
+        const id = this.currentUserId;
+        if (!id) throw new Error('no current user');
+        const res = await fetch(`${this.apiBase}/friend-requests/respond`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: id, requestId, action })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            const error = new Error(err?.error || 'respondFriendRequest failed');
+            (error as any).code = err?.error;
+            throw error;
+        }
+        return await res.json(); // { ok: true }
+    }
+
+    /** 查詢使用者公開資料 */
+    static async lookupUserById(userId: string): Promise<{ userId: string, displayName?: string, picture?: string } | null> {
+        const id = (userId || '').trim();
+        if (!id) return null;
+        try {
+            const res = await fetch(`${this.apiBase}/public/player/${encodeURIComponent(id)}`);
+            if (res.status === 404) return null;
+            if (!res.ok) throw new Error(`lookupUserById failed: ${res.status}`);
+            const doc = await res.json();
+            return { userId: doc.userId, displayName: doc.displayName, picture: doc.picture };
+        } catch (e) {
+            console.warn('[lookupUserById] failed:', e);
+            throw e;
+        }
+    }
+
+    /** 取得好友的公開玩家資料（用於顯示魚缸） */
     static async getPublicPlayerData(friendUserId: string) {
         const res = await fetch(`${this.apiBase}/public/player/${encodeURIComponent(friendUserId)}`);
         if (!res.ok) throw new Error(await res.text());
