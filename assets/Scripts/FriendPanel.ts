@@ -1,87 +1,191 @@
-import { _decorator, Component, Node, EditBox, Label, Prefab, instantiate, Button, Sprite, SpriteFrame, Texture2D, ImageAsset } from 'cc';
+import { _decorator, Component, Node, EditBox, Label, Prefab, instantiate, Button, Sprite, SpriteFrame, Texture2D, ImageAsset, Color } from 'cc';
 import { DataManager } from './DataManager';
 import { GameManager } from './GameManager';
 import { showFloatingTextCenter } from './utils/UIUtils';
 
 const { ccclass, property } = _decorator;
 
+enum TabKind { Friends = 'friends', Explore = 'explore' }
+
 @ccclass('FriendPanel')
 export class FriendPanel extends Component {
-    @property(EditBox) friendIdInput: EditBox = null!;   // 輸入好友 ID 輸入框
-    @property(Button) SearchBtn: Button = null!;         // 搜尋按鈕
-    @property(Node) listContent: Node = null!;           // 顯示搜尋結果容器
-    @property(Prefab) friendRowPrefab: Prefab = null!;   // 好友列 Prefab
-    @property(Node) floatingNode: Node = null!;          // 提示浮動訊息
-    @property(Node) emptyStateNode: Node = null!;        // 空狀態
+    // 共用 UI
+    @property(Node) floatingNode: Node = null!;                // 提示浮動訊息
     @property(SpriteFrame) defaultAvatar: SpriteFrame = null!; // 頭像預設圖片
 
-    onEnable() { this.refreshList(); }
+    // 分頁按鈕
+    @property(Button) friendsTabBtn: Button = null!;           // 我的好友
+    @property(Button) exploreTabBtn: Button = null!;           // 探索
+
+    // 我的好友分頁
+    @property(Node) friendsSection: Node = null!;
+    @property(Node) friendsListContent: Node = null!;
+    @property(Prefab) friendRowPrefab: Prefab = null!;
+    @property(Node) friendsEmptyState: Node = null!;
+
+    // 探索分頁
+    @property(Node) exploreSection: Node = null!;
+    @property(Node) exploreListContent: Node = null!;
+    @property(EditBox) friendIdInput: EditBox = null!;  // 輸入好友 ID 輸入框
+    @property(Button) searchBtn: Button = null!;        // 搜尋按鈕
+    @property(Node) exploreEmptyState: Node = null!;
+    @property(Prefab) searchRowPrefab: Prefab = null!;
+
+    private currentTab: TabKind = TabKind.Friends; // 預設顯示「我的好友」
+
+    onEnable() {
+        this.bindEvents();
+        this.switchTab(this.currentTab);
+    }
+
+    onDisable() {          // 解除事件，避免重複綁定
+        this.unbindEvents();
+    }
 
     /** 初始化 */
     start() {
-        this.refreshList();
-        if (this.SearchBtn) {
-            this.SearchBtn.node.on(Button.EventType.CLICK, this.onClickSearch, this);
+    }
+
+    /** 事件綁定 */
+    private bindEvents() {
+        this.exploreTabBtn?.node.on(Button.EventType.CLICK, this.onClickExploreTab, this);
+        this.friendsTabBtn?.node.on(Button.EventType.CLICK, this.onClickFriendsTab, this);
+        this.searchBtn?.node.on(Button.EventType.CLICK, this.onClickSearch, this);
+    }
+    private unbindEvents() {
+        this.exploreTabBtn?.node.off(Button.EventType.CLICK, this.onClickExploreTab, this);
+        this.friendsTabBtn?.node.off(Button.EventType.CLICK, this.onClickFriendsTab, this);
+        this.searchBtn?.node.off(Button.EventType.CLICK, this.onClickSearch, this);
+    }
+
+
+    /** 分頁切換 */
+    private onClickFriendsTab() { this.switchTab(TabKind.Friends); }
+    private onClickExploreTab() { this.switchTab(TabKind.Explore); }
+    private async switchTab(tab: TabKind) {
+        this.currentTab = tab;
+        this.updateTabVisual();
+
+        // 互斥顯示
+        this.friendsSection && (this.friendsSection.active = (tab === TabKind.Friends));
+        this.exploreSection && (this.exploreSection.active = (tab === TabKind.Explore));
+
+        // 清空該分頁的 list
+        this.getActiveList()?.removeAllChildren();
+
+        if (tab === TabKind.Friends) {
+            await this.refreshFriendsList();
+        } else {
+            await this.refreshExploreList();
         }
     }
 
-    /** 初始化時清空列表，顯示空狀態 */
-    async refreshList() {
-        this.listContent.removeAllChildren();
-        if (this.emptyStateNode) this.emptyStateNode.active = true;
+
+    /** 分頁按鈕視覺切換 */
+    private updateTabVisual() {
+        const isFriends = this.currentTab === TabKind.Friends;
+
+        // 選中的顏色
+        const selectedColor = new Color(80, 180, 255, 255); 
+        // 未選中的顏色
+        const unselectedColor = new Color(180, 180, 180, 255); 
+
+        // 如果按鈕有 Sprite 元件，直接改底色
+        const friendsSprite = this.friendsTabBtn?.getComponent(Sprite);
+        const exploreSprite = this.exploreTabBtn?.getComponent(Sprite);
+
+        if (friendsSprite) friendsSprite.color = isFriends ? selectedColor : unselectedColor;
+        if (exploreSprite) exploreSprite.color = isFriends ? unselectedColor : selectedColor;
+
+    }
+
+    private async refreshExploreList() {
+        const list = this.exploreListContent;
+        list.removeAllChildren();
+        this.showEmptyState('請輸入好友 ID 搜尋');
+    }
+
+    /** 載入所有好友 */
+    private async refreshFriendsList() {
+        const list = this.friendsListContent;
+        try {
+            const friends = await DataManager.getFriends().catch(() => []);
+            list.removeAllChildren();
+
+            if (!friends || friends.length === 0) {
+                this.showEmptyState('還沒有好友，快去探索結交新朋友吧！');
+                return;
+            }
+
+            this.hideEmptyState();
+
+            for (const f of friends) {
+                const row = instantiate(this.friendRowPrefab);
+                const nameLabel = row.getChildByName('NameLabel')?.getComponent(Label);
+                if (nameLabel) nameLabel.string = f.displayName || '(未設定暱稱)';
+                const idLabel = row.getChildByName('IdLabel')?.getComponent(Label);
+                if (idLabel) idLabel.string = f.userId;
+
+                const avatarMask = row.getChildByName('UserAvatarMask');
+                const avatarSprite = avatarMask?.getChildByName('UserAvatar')?.getComponent(Sprite);
+                if (avatarSprite) {
+                    if (f.picture) await this.loadAvatar(f.picture, avatarSprite);
+                    else avatarSprite.spriteFrame = this.defaultAvatar;
+                }
+
+                const viewBtn = row.getChildByName('ViewBtn')?.getComponent(Button);
+                viewBtn?.node.once(Button.EventType.CLICK, () => this.onViewFriendTank(f.userId), this);
+
+                row.parent = list; // ★ 放到 friendsListContent
+            }
+        } catch (e) {
+            console.warn('[FriendPanel] load friends failed:', e);
+            list.removeAllChildren();
+            this.showEmptyState('載入好友失敗，請稍後再試');
+        }
     }
 
     /** 點擊搜尋好友 */
     async onClickSearch() {
+        // 若不在探索分頁，先切過去（避免塞到朋友分頁的 list）
+        if (this.currentTab !== TabKind.Explore) {
+            await this.switchTab(TabKind.Explore);
+        }
+
+        const list = this.exploreListContent;
+
         const queryId = (this.friendIdInput.string || '').trim();
         if (!queryId) {
-            // 沒輸入 ID 時顯示提示
-            this.listContent.removeAllChildren();
+            list.removeAllChildren();
             this.showEmptyState('請輸入好友 ID');
             return;
         }
 
         try {
-            // 清空列表並顯示搜尋中
-            this.listContent.removeAllChildren();
+            list.removeAllChildren();
             this.showEmptyState('搜尋中…');
 
-            // 查詢使用者
             const user = await DataManager.lookupUserById(queryId);
             if (!user) {
-                this.listContent.removeAllChildren();
-                this.showEmptyState('找不到此使用者');
+                list.removeAllChildren();
+                this.showEmptyState('海裡翻遍了，也沒找到這位玩家');
                 return;
             }
 
-            // 找到使用者，隱藏空狀態
             this.hideEmptyState();
 
-            // 建立一筆好友列
-            const row = instantiate(this.friendRowPrefab);
-
-            // 名字、ID
+            const row = instantiate(this.searchRowPrefab);
             const nameLabel = row.getChildByName('NameLabel')?.getComponent(Label);
-            const idLabel = row.getChildByName('IdLabel')?.getComponent(Label);
             if (nameLabel) nameLabel.string = user.displayName || '(未設定暱稱)';
+            const idLabel = row.getChildByName('IdLabel')?.getComponent(Label);
             if (idLabel) idLabel.string = user.userId;
 
-            // 頭貼
             const avatarMask = row.getChildByName('UserAvatarMask');
             const avatarSprite = avatarMask?.getChildByName('UserAvatar')?.getComponent(Sprite);
             if (avatarSprite) {
-                if (user.picture) {
-                    this.loadAvatar(user.picture, avatarSprite);
-                } else {
-                    avatarSprite.spriteFrame = this.defaultAvatar;
-                }
+                if (user.picture) await this.loadAvatar(user.picture, avatarSprite);
+                else avatarSprite.spriteFrame = this.defaultAvatar;
             }
-
-            // // 查看好友魚缸
-            // const viewBtn = row.getChildByName('ViewBtn')?.getComponent(Button);
-            // if (viewBtn) {
-            //     viewBtn.node.on(Button.EventType.CLICK, () => this.onViewFriendTank(user.userId), this);
-            // }
 
             // 送出邀請按鈕
             const inviteBtn = row.getChildByName('InviteBtn')?.getComponent(Button);
@@ -151,30 +255,32 @@ export class FriendPanel extends Component {
                 }, this);
             }
 
-            // 把結果加到列表
-            row.parent = this.listContent;
+            row.parent = list;
 
         } catch (e) {
             console.warn('[FriendPanel] search failed:', e);
-            this.listContent.removeAllChildren();
+            list.removeAllChildren();
             this.showEmptyState('查詢失敗，請稍後再試');
         }
     }
 
+    private getActiveList(): Node {
+        return this.currentTab === TabKind.Friends ? this.friendsListContent : this.exploreListContent;
+    }
+
     /** 顯示空狀態文字 */
-    private showEmptyState(message: string) {
-        if (!this.emptyStateNode) return;
-        const msgLabel =
-            this.emptyStateNode.getComponent(Label) ||
-            this.emptyStateNode.getChildByName('MessageLabel')?.getComponent(Label) ||
-            this.emptyStateNode.getComponentInChildren(Label);
-        if (msgLabel) msgLabel.string = message;
-        this.emptyStateNode.active = true;
+    private showEmptyState(msg: string) {
+        const n = this.currentTab === TabKind.Friends ? this.friendsEmptyState : this.exploreEmptyState;
+        if (!n) return;
+        const msgLabel = n.getComponent(Label) || n.getChildByName('MessageLabel')?.getComponent(Label) || n.getComponentInChildren(Label);
+        if (msgLabel) msgLabel.string = msg;
+        n.active = true;
     }
 
     /** 隱藏空狀態 */
     private hideEmptyState() {
-        if (this.emptyStateNode) this.emptyStateNode.active = false;
+        const n = this.currentTab === TabKind.Friends ? this.friendsEmptyState : this.exploreEmptyState;
+        if (n) n.active = false;
     }
 
     /** 載入頭像圖片 */

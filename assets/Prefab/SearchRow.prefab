@@ -1,7 +1,7 @@
 [
   {
     "__type__": "cc.Prefab",
-    "_name": "FriendRow",
+    "_name": "SearchRow",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_native": "",
@@ -13,7 +13,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "FriendRow",
+    "_name": "SearchRow",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": null,
@@ -49,7 +49,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": -3.3000000000000114,
-      "y": -90.983,
+      "y": -232.099,
       "z": 0
     },
     "_lrot": {
@@ -108,7 +108,7 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -266.7,
+      "x": -231.50900000000007,
       "y": 0,
       "z": 0
     },
@@ -481,7 +481,7 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 16.011000000000024,
+      "x": 51.20199999999994,
       "y": 21.069999999999993,
       "z": 0
     },
@@ -679,7 +679,7 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 57.15700000000001,
+      "x": 92.34799999999993,
       "y": -31.460000000000004,
       "z": 0
     },
@@ -853,7 +853,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "ViewBtn",
+    "_name": "InviteBtn",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {
@@ -884,7 +884,7 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 244.71250000000006,
+      "x": 209.52150000000015,
       "y": 0,
       "z": 0
     },
@@ -975,7 +975,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 60,
+      "width": 80,
       "height": 50.4
     },
     "_anchorPoint": {
@@ -1011,7 +1011,7 @@
       "b": 0,
       "a": 255
     },
-    "_string": "看魚缸",
+    "_string": "送出邀請",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
     "_actualFontSize": 20,
@@ -1264,7 +1264,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 683.4,
+      "width": 613.0180000000001,
       "height": 138.066
     },
     "_anchorPoint": {
@@ -1368,7 +1368,6 @@
       "__id__": 0
     },
     "fileId": "84du3s/JZLOZ8Z4S/JmtQN",
-    "instance": null,
     "targetOverrides": null
   }
 ]
