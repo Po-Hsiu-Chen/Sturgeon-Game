@@ -153,7 +153,7 @@ export interface MailItem {
 }
 
 export class DataManager {
-    static useLocalStorage = false;            
+    static useLocalStorage = false;
     static apiBase = '';                        // API 伺服器 URL
     static currentUserId: string | null = null; // 當前登入的玩家 ID
     static ready: Promise<void> | null = null;  // 初始化完成後的 Promise
@@ -350,7 +350,7 @@ export class DataManager {
         return await res.json(); // { incoming, outgoing }
     }
 
-     /** 取得收件匣 */
+    /** 取得收件匣 */
     static async getInbox(): Promise<MailItem[]> {
         const id = this.currentUserId;
         if (!id) throw new Error('no current user');
@@ -411,6 +411,22 @@ export class DataManager {
         const res = await fetch(`${this.apiBase}/public/player/${encodeURIComponent(friendUserId)}`);
         if (!res.ok) throw new Error(await res.text());
         return await res.json(); // 僅含 fishList, tankList, tankEnvironment, displayName...
+    }
+
+    /** 取得推薦玩家（隨機） */
+    static async getRecommendedUsers(count = 5): Promise<Array<{ userId: string, displayName?: string, picture?: string }>> {
+        try {
+            const id = this.currentUserId;  // 當前登入玩家
+            const res = await fetch(`${this.apiBase}/recommend-users?count=${count}&excludeUserId=${encodeURIComponent(id || '')}`);
+            if (!res.ok) {
+                console.warn('[DataManager] getRecommendedUsers failed:', res.status);
+                return [];
+            }
+            return await res.json();
+        } catch (e) {
+            console.warn('[DataManager] getRecommendedUsers error:', e);
+            return [];
+        }
     }
 
 }

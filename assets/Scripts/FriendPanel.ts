@@ -12,6 +12,7 @@ export class FriendPanel extends Component {
     // 共用 UI
     @property(Node) floatingNode: Node = null!;                // 提示浮動訊息
     @property(SpriteFrame) defaultAvatar: SpriteFrame = null!; // 頭像預設圖片
+    @property(Prefab) emptyStatePrefab: Prefab = null!;        // 空狀態或分隔線提示文字
 
     // 分頁按鈕
     @property(Button) friendsTabBtn: Button = null!;           // 我的好友
@@ -21,14 +22,12 @@ export class FriendPanel extends Component {
     @property(Node) friendsSection: Node = null!;
     @property(Node) friendsListContent: Node = null!;
     @property(Prefab) friendRowPrefab: Prefab = null!;
-    @property(Node) friendsEmptyState: Node = null!;
 
     // 探索分頁
     @property(Node) exploreSection: Node = null!;
     @property(Node) exploreListContent: Node = null!;
     @property(EditBox) friendIdInput: EditBox = null!;  // 輸入好友 ID 輸入框
     @property(Button) searchBtn: Button = null!;        // 搜尋按鈕
-    @property(Node) exploreEmptyState: Node = null!;
     @property(Prefab) searchRowPrefab: Prefab = null!;
 
     private currentTab: TabKind = TabKind.Friends; // 預設顯示「我的好友」
@@ -86,9 +85,9 @@ export class FriendPanel extends Component {
         const isFriends = this.currentTab === TabKind.Friends;
 
         // 選中的顏色
-        const selectedColor = new Color(80, 180, 255, 255); 
+        const selectedColor = new Color(80, 180, 255, 255);
         // 未選中的顏色
-        const unselectedColor = new Color(180, 180, 180, 255); 
+        const unselectedColor = new Color(180, 180, 180, 255);
 
         // 如果按鈕有 Sprite 元件，直接改底色
         const friendsSprite = this.friendsTabBtn?.getComponent(Sprite);
@@ -102,22 +101,24 @@ export class FriendPanel extends Component {
     private async refreshExploreList() {
         const list = this.exploreListContent;
         list.removeAllChildren();
-        this.showEmptyState('請輸入好友 ID 搜尋');
+
+        // 插入分隔線
+        this.addEmptyStateToList(list, '-----推薦好友-----', true);
+        await this.recommendFriends(true);
     }
 
     /** 載入所有好友 */
     private async refreshFriendsList() {
         const list = this.friendsListContent;
+        list.removeAllChildren();
+
         try {
             const friends = await DataManager.getFriends().catch(() => []);
-            list.removeAllChildren();
 
             if (!friends || friends.length === 0) {
-                this.showEmptyState('還沒有好友，快去探索結交新朋友吧！');
+                this.addEmptyStateToList(list, '還沒有好友，快去探索結交新朋友吧！');
                 return;
             }
-
-            this.hideEmptyState();
 
             for (const f of friends) {
                 const row = instantiate(this.friendRowPrefab);
@@ -136,14 +137,67 @@ export class FriendPanel extends Component {
                 const viewBtn = row.getChildByName('ViewBtn')?.getComponent(Button);
                 viewBtn?.node.once(Button.EventType.CLICK, () => this.onViewFriendTank(f.userId), this);
 
-                row.parent = list; // ★ 放到 friendsListContent
+                row.parent = list;
             }
         } catch (e) {
             console.warn('[FriendPanel] load friends failed:', e);
             list.removeAllChildren();
-            this.showEmptyState('載入好友失敗，請稍後再試');
+            this.addEmptyStateToList(list, '載入好友失敗，請稍後再試');
         }
     }
+
+    /** 隨機推薦幾個玩家 */
+    private async recommendFriends(appendMode = false) {
+        const list = this.exploreListContent;
+        if (!appendMode) {
+            list.removeAllChildren();
+            this.addEmptyStateToList(list, '推薦中…');
+        }
+
+        try {
+            const candidates = await DataManager.getRecommendedUsers(5).catch(() => []);
+            if (!candidates || candidates.length === 0) {
+                if (!appendMode) this.addEmptyStateToList(list, '目前沒有推薦的玩家');
+                return;
+            }
+
+            const [friends, reqs] = await Promise.all([
+                DataManager.getFriends().catch(() => []),
+                DataManager.getFriendRequests().catch(() => ({ incoming: [], outgoing: [] }))
+            ]);
+
+            for (const user of candidates) {
+                const row = instantiate(this.searchRowPrefab);
+
+                // 顯示資料
+                const nameLabel = row.getChildByName('NameLabel')?.getComponent(Label);
+                if (nameLabel) nameLabel.string = user.displayName || '(未設定暱稱)';
+
+                const idLabel = row.getChildByName('IdLabel')?.getComponent(Label);
+                if (idLabel) idLabel.string = user.userId;
+
+                const avatarMask = row.getChildByName('UserAvatarMask');
+                const avatarSprite = avatarMask?.getChildByName('UserAvatar')?.getComponent(Sprite);
+                if (avatarSprite) {
+                    if (user.picture) await this.loadAvatar(user.picture, avatarSprite);
+                    else avatarSprite.spriteFrame = this.defaultAvatar;
+                }
+
+                // 設定邀請按鈕（統一走 setupInviteButton）
+                const inviteBtn = row.getChildByName('InviteBtn')?.getComponent(Button);
+                if (inviteBtn) this.setupInviteButton(inviteBtn, user.userId, friends, reqs);
+
+                row.parent = list;
+            }
+        } catch (e) {
+            console.warn('[FriendPanel] recommend friends failed:', e);
+            if (!appendMode) {
+                list.removeAllChildren();
+                this.addEmptyStateToList(list, '推薦好友失敗，請稍後再試');
+            }
+        }
+    }
+
 
     /** 點擊搜尋好友 */
     async onClickSearch() {
@@ -157,23 +211,32 @@ export class FriendPanel extends Component {
         const queryId = (this.friendIdInput.string || '').trim();
         if (!queryId) {
             list.removeAllChildren();
-            this.showEmptyState('請輸入好友 ID');
+            this.addEmptyStateToList(list, '請輸入好友 ID');
             return;
         }
 
         try {
             list.removeAllChildren();
-            this.showEmptyState('搜尋中…');
-
+            
+            const loadingNode = this.addEmptyStateToList(list, '搜尋中…');
             const user = await DataManager.lookupUserById(queryId);
+
+            // 無論找到或找不到，先把 loading 移除
+            if (loadingNode && loadingNode.isValid) loadingNode.destroy();
+
             if (!user) {
                 list.removeAllChildren();
-                this.showEmptyState('海裡翻遍了，也沒找到這位玩家');
+
+                // 顯示查無此人
+                this.addEmptyStateToList(list, '海裡翻遍了，也沒找到這位玩家');
+
+                // 插入推薦好友分隔線
+                this.addEmptyStateToList(list, '-----推薦好友-----', true);
+                await this.recommendFriends(true);
                 return;
             }
 
-            this.hideEmptyState();
-
+            // 顯示結果
             const row = instantiate(this.searchRowPrefab);
             const nameLabel = row.getChildByName('NameLabel')?.getComponent(Label);
             if (nameLabel) nameLabel.string = user.displayName || '(未設定暱稱)';
@@ -196,63 +259,9 @@ export class FriendPanel extends Component {
                 DataManager.getFriendRequests().catch(() => ({ incoming: [], outgoing: [] }))
             ]);
 
-            const isFriend = friends?.some(f => f.userId === user.userId);
-            const hasOutgoingPending = reqs?.outgoing?.some(r => r.toUserId === user.userId && r.status === 'pending');
-            const hasIncomingPending = reqs?.incoming?.some(r => r.fromUserId === user.userId && r.status === 'pending');
-
             // 根據狀態設定按鈕
             if (inviteBtn) {
-                if (isFriend) {
-                    this.setInviteBtn(inviteBtn, '已是好友', false);
-                } else if (hasOutgoingPending) {
-                    this.setInviteBtn(inviteBtn, '已送出邀請', false);
-                } else if (hasIncomingPending) {
-                    this.setInviteBtn(inviteBtn, '對方已邀請你', false);
-                } else {
-                    this.setInviteBtn(inviteBtn, '送出邀請', true);
-                }
-            }
-
-            // 綁定邀請按鈕點擊事件
-            if (inviteBtn) {
-                inviteBtn.node.on(Button.EventType.CLICK, async () => {
-                    try {
-                        this.setInviteBtn(inviteBtn, '送出中…', false); // 點擊後鎖住按鈕
-                        const resp = await DataManager.sendFriendRequest(user.userId); // 發送好友邀請
-
-                        // 若後端偵測到對向已有 pending，可能直接 auto-accept
-                        if ((resp as any)?.autoAccepted) {
-                            this.setInviteBtn(inviteBtn, '已成為好友', false);
-                            showFloatingTextCenter(this.floatingNode, '已成為好友！');
-                        } else {
-                            this.setInviteBtn(inviteBtn, '已送出邀請', false);
-                            showFloatingTextCenter(this.floatingNode, '邀請已送出，等待對方確認');
-                        }
-
-                        this.node.emit('refresh-mail-badge'); // 可選：刷新徽章
-                    } catch (e: any) {
-                        console.warn('sendFriendRequest failed:', e);
-                        const code = e?.code || '';
-
-                        // 根據錯誤碼提示訊息
-                        if (code === 'user_not_found' || code === 'user_or_friend_not_found') {
-                            showFloatingTextCenter(this.floatingNode, 'ID 錯誤或對方未玩遊戲');
-                            this.setInviteBtn(inviteBtn, '送出邀請', true);
-                        } else if (code === 'cannot_add_self') {
-                            showFloatingTextCenter(this.floatingNode, '不能加自己為好友');
-                            this.setInviteBtn(inviteBtn, '送出邀請', true);
-                        } else if (code === 'already_friends') {
-                            this.setInviteBtn(inviteBtn, '已是好友', false);
-                            showFloatingTextCenter(this.floatingNode, '你們已經是好友');
-                        } else if (code === 'already_pending') {
-                            this.setInviteBtn(inviteBtn, '已送出邀請', false);
-                            showFloatingTextCenter(this.floatingNode, '已經有待確認的邀請');
-                        } else {
-                            showFloatingTextCenter(this.floatingNode, '送出邀請失敗');
-                            this.setInviteBtn(inviteBtn, '送出邀請', true);
-                        }
-                    }
-                }, this);
+                this.setupInviteButton(inviteBtn, user.userId, friends, reqs);
             }
 
             row.parent = list;
@@ -260,27 +269,12 @@ export class FriendPanel extends Component {
         } catch (e) {
             console.warn('[FriendPanel] search failed:', e);
             list.removeAllChildren();
-            this.showEmptyState('查詢失敗，請稍後再試');
+            this.addEmptyStateToList(list, '查詢失敗，請稍後再試');
         }
     }
 
     private getActiveList(): Node {
         return this.currentTab === TabKind.Friends ? this.friendsListContent : this.exploreListContent;
-    }
-
-    /** 顯示空狀態文字 */
-    private showEmptyState(msg: string) {
-        const n = this.currentTab === TabKind.Friends ? this.friendsEmptyState : this.exploreEmptyState;
-        if (!n) return;
-        const msgLabel = n.getComponent(Label) || n.getChildByName('MessageLabel')?.getComponent(Label) || n.getComponentInChildren(Label);
-        if (msgLabel) msgLabel.string = msg;
-        n.active = true;
-    }
-
-    /** 隱藏空狀態 */
-    private hideEmptyState() {
-        const n = this.currentTab === TabKind.Friends ? this.friendsEmptyState : this.exploreEmptyState;
-        if (n) n.active = false;
     }
 
     /** 載入頭像圖片 */
@@ -322,6 +316,80 @@ export class FriendPanel extends Component {
         const label = inviteBtn.node.getComponentInChildren(Label);
         if (label) label.string = text;
         inviteBtn.interactable = enabled;
+    }
+
+    /** 在列表中插入一個空狀態或分隔線 */
+    private addEmptyStateToList(list: Node, message: string, isSeparator: boolean = false) {
+        if (!this.emptyStatePrefab) return;
+
+        const node = instantiate(this.emptyStatePrefab);
+        const label = node.getComponentInChildren(Label);
+
+        // 設定文字
+        if (label) {
+            label.string = message;
+            if (isSeparator) {
+                label.color = new Color(0, 0, 0, 255);   // 分隔線文字顏色
+                label.fontSize = 20;                     // 分隔線標題較小
+            } else {
+                label.color = new Color(0, 0, 0, 255);   // 空狀態正常顏色
+                label.fontSize = 24;
+            }
+        }
+
+        node.parent = list;
+        return node; 
+    }
+
+    /** 統一設定邀請按鈕狀態與事件 */
+    private setupInviteButton(inviteBtn: Button, userId: string, friends: Array<{ userId: string }>, reqs: { incoming: any[], outgoing: any[] }) {
+        const isFriend = friends?.some(f => f.userId === userId);
+        const hasOutgoingPending = reqs?.outgoing?.some(r => r.toUserId === userId && r.status === 'pending');
+        const hasIncomingPending = reqs?.incoming?.some(r => r.fromUserId === userId && r.status === 'pending');
+
+        // 先清除舊的事件監聽，避免重複觸發
+        inviteBtn.node.off(Button.EventType.CLICK);
+
+        if (isFriend) {
+            this.setInviteBtn(inviteBtn, '已是好友', false);
+        } else if (hasOutgoingPending) {
+            this.setInviteBtn(inviteBtn, '已送出邀請', false);
+        } else if (hasIncomingPending) {
+            this.setInviteBtn(inviteBtn, '對方已邀請你', false);
+        } else {
+            // 可送出邀請
+            this.setInviteBtn(inviteBtn, '送出邀請', true);
+
+            inviteBtn.node.on(Button.EventType.CLICK, async () => {
+                try {
+                    this.setInviteBtn(inviteBtn, '送出中…', false);
+                    const resp = await DataManager.sendFriendRequest(userId);
+
+                    // 即時更新 reqs 避免刷新前仍顯示可送出
+                    reqs.outgoing.push({
+                        requestId: resp.request.requestId,
+                        fromUserId: DataManager.currentUserId!,
+                        toUserId: userId,
+                        createdAt: new Date().toISOString(),
+                        status: 'pending'
+                    });
+
+                    if ((resp as any)?.autoAccepted) {
+                        this.setInviteBtn(inviteBtn, '已成為好友', false);
+                        showFloatingTextCenter(this.floatingNode, '已成為好友！');
+                    } else {
+                        this.setInviteBtn(inviteBtn, '已送出邀請', false);
+                        showFloatingTextCenter(this.floatingNode, '邀請已送出，等待對方確認');
+                    }
+
+                    this.node.emit('refresh-mail-badge');
+                } catch (e) {
+                    console.warn('sendFriendRequest failed:', e);
+                    this.setInviteBtn(inviteBtn, '送出邀請', true);
+                    showFloatingTextCenter(this.floatingNode, '邀請失敗，請稍後再試');
+                }
+            }, this);
+        }
     }
 
 }

@@ -460,6 +460,37 @@ app.post('/friend-requests/respond', async (req, res) => {
   res.status(400).json({ error: 'invalid_action' });
 });
 
+/** 推薦隨機玩家 */
+/** 推薦隨機玩家 */
+app.get('/recommend-users', async (req, res) => {
+  try {
+    const count = parseInt(req.query.count) || 5;
+    const excludeUserId = (req.query.excludeUserId || '').toString();
+
+    // 先找出使用者的好友清單
+    const currentUser = await users.findOne(
+      { userId: excludeUserId },
+      { projection: { friends: 1 } }
+    );
+
+    const excludeIds = [excludeUserId, ...(currentUser?.friends || [])];
+
+    // 從 DB 隨機抓玩家（排除自己和好友）
+    const pipeline = [
+      { $match: { userId: { $nin: excludeIds } } },
+      { $sample: { size: count } },
+      { $project: { _id: 0, userId: 1, displayName: 1, picture: 1 } }
+    ];
+
+    const usersList = await users.aggregate(pipeline).toArray();
+    res.json(usersList);
+  } catch (e) {
+    console.error('[GET /recommend-users] error:', e);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+
 // ------------------- 信箱 API -------------------
 
 /** 取得收件匣 */
