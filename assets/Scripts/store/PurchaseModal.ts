@@ -113,8 +113,8 @@ export class PurchaseModal extends Component {
     const need  = price * this.qty;
 
     if (this.qtyLabel)  this.qtyLabel.string  = String(this.qty);
-    if (this.haveLabel) this.haveLabel.string = have.toLocaleString('zh-TW');
-    if (this.needLabel) this.needLabel.string = need.toLocaleString('zh-TW');
+    if (this.haveLabel) this.haveLabel.string = have.toString();
+    if (this.needLabel) this.needLabel.string = need.toString();
 
     const isNCBlocked = this.item.type !== 'CONSUMABLE' && this.state.isOwned(this.item.sku);
     const maxQ = this.maxAffordable() || 1;

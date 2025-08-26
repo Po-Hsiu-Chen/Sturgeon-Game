@@ -10,7 +10,7 @@ import { authWithLine } from './api/Api';
 const { ccclass, property } = _decorator;
 const LIFF_ID = '2007937783-PJ4ZRBdY';
 const RED = new Color(255, 0, 0, 255);    // 紅色
-const GREEN = new Color(0, 255, 0, 255);  // 綠色
+const GREEN = new Color(120, 198, 80, 255);  // 綠色
 const BLUE = new Color(0, 0, 255, 255);   // 藍色
 
 const TankAssets = {
@@ -85,6 +85,7 @@ export class GameManager extends Component {
 
     private confirmCallback: Function | null = null;         // 確認回調
     private currentTankId: number = 1;                       // 當前魚缸 ID
+    private offDMChange: (() => void) | null = null; 
     private playerData: PlayerData | null = null;
     private isViewingFriend = false;
 
@@ -140,6 +141,12 @@ export class GameManager extends Component {
         await this.tombManager?.init();
         await this.refreshEnvironmentUI();
 
+        this.offDMChange = DataManager.onChange((p) => {
+        // 任何時候玩家資料被更新（包含購買扣龍骨），都會進到這裡
+        this.playerData = p;
+        // 立即刷新畫面上的顯示（龍骨數、道具數、環境按鈕等）
+        void this.refreshEnvironmentUI();
+        });
 
         // 顯示基本資料
         this.userNameLabel.string = this.playerData.displayName || "未命名";
@@ -639,6 +646,12 @@ export class GameManager extends Component {
 
         this.updateEnvironmentOverlays(env);
     }
+
+    async onDestroy() {
+        this.offDMChange?.();
+        this.offDMChange = null;
+    }
+
 
     /** 使用加熱器（點擊） */
     async onClickHeater() {

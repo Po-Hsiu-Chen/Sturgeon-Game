@@ -57,7 +57,7 @@ export class StoreUI extends Component {
   // 顯示錢包
   private renderWallet = () => {
     const n = this.state.wallet.DRAGONBONE;
-    this.boneLabel.string = n.toLocaleString('zh-TW');
+    this.boneLabel.string = n.toString();
   }
 
   // 價格字串（DRAGONBONE）
