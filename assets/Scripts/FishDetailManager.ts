@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Label, Sprite, SpriteFrame, EditBox, Vec3, tween, UITransform, UIOpacity } from 'cc';
+import { _decorator, Component, Node, Label, Sprite, SpriteFrame, EditBox, Vec3, tween, UITransform, UIOpacity, Button } from 'cc';
 import { SwimmingFish } from './SwimmingFish';
 import { FishLogic } from './FishLogic';
 import { GameManager } from './GameManager';
@@ -28,12 +28,14 @@ export class FishDetailManager extends Component {
     @property(Node) healSection: Node = null!;
     @property(Node) healTabButton: Node = null!;
     @property(Node) genderPotionBtn: Node = null!;
-    @property(Node) upgradePotionBtn: Node = null!;
     @property(Label) genderPotionCountLabel: Label = null!;
+    @property(Node) upgradePotionBtn: Node = null!;
     @property(Label) upgradePotionCountLabel: Label = null!;
     @property(Node) coldMedicineBtn: Node = null!;
     @property(Label) coldMedicineCountLabel: Label = null!;
-
+    @property(Node) changePotionBtn: Node = null!;
+    @property(Label) changePotionCountLabel: Label = null!;
+    
     // Feed 相關
     @property(Node) feedSection: Node = null!;
     @property(Node) feedTabButton: Node = null!;
@@ -68,6 +70,7 @@ export class FishDetailManager extends Component {
 
     private currentFishId: number = -1;
     private confirmCallback: Function | null = null;
+    private isReadOnly: boolean = false;
 
     /** 初始化 */
     start() {
@@ -110,37 +113,77 @@ export class FishDetailManager extends Component {
 
     }
 
-    /** 顯示魚詳細資訊 */
-    async showFishDetail(fish: FishData, emotionSprite?: SpriteFrame | null) {
+    /** 顯示魚詳細資訊（opts.readOnly: 朋友魚唯讀） */
+    async showFishDetail(
+        fish: FishData,
+        emotionSprite?: SpriteFrame | null,
+        opts?: { readOnly?: boolean }
+    ) {
         playOpenPanelAnim(this.fishDetailPanel);
         this.currentFishId = fish.id;
         this.switchTab('feed'); // 預設顯示餵食面板
 
-        // 顯示資訊
+        // 顯示魚基本資訊
         this.fishNameLabel.string = fish.name;
         this.genderLabel.string = `性別：${fish.gender === 'male' ? '公' : '母'}`;
         this.daysLabel.string = `已成長天數：${fish.growthDaysPassed}`;
         this.stageLabel.string = `LV ${fish.stage}`;
         this.hungerLabel.string = `飢餓值：${Math.floor(fish.hunger)} / 100`;
 
-        // 剩餘數量顯示
-        const playerData = await DataManager.getPlayerDataCached();
-        this.feedNormalCountLabel.string = playerData.inventory.feeds.normal.toString();
-        this.feedPremiumCountLabel.string = playerData.inventory.feeds.premium.toString();
-        this.genderPotionCountLabel.string = playerData.inventory.items.genderPotion.toString();
-        this.upgradePotionCountLabel.string = playerData.inventory.items.upgradePotion.toString();
-        this.coldMedicineCountLabel.string = playerData.inventory.items.coldMedicine.toString();
+        // 判斷是否唯讀（朋友魚缸）
+        const isReadOnly = !!opts?.readOnly;
 
-        // 綁定按鈕事件
+        // 顯示剩餘數量
+        if (isReadOnly) {
+            // 朋友魚數量顯示為 "-"
+            this.feedNormalCountLabel.string = "-";
+            this.feedPremiumCountLabel.string = "-";
+            this.genderPotionCountLabel.string = "-";
+            this.upgradePotionCountLabel.string = "-";
+            this.changePotionCountLabel.string = "-";
+            this.coldMedicineCountLabel.string = "-";
+        } else {
+            // 自己的魚顯示實際數量
+            const playerData = await DataManager.getPlayerDataCached();
+            this.feedNormalCountLabel.string = playerData.inventory.feeds.normal.toString();
+            this.feedPremiumCountLabel.string = playerData.inventory.feeds.premium.toString();
+            this.genderPotionCountLabel.string = playerData.inventory.items.genderPotion.toString();
+            this.upgradePotionCountLabel.string = playerData.inventory.items.upgradePotion.toString();
+            this.changePotionCountLabel.string = playerData.inventory.items.changePotion.toString();
+            this.coldMedicineCountLabel.string = playerData.inventory.items.coldMedicine.toString();
+        }
+
+        // 先清掉舊事件
         this.feedBtnNormal.off(Node.EventType.TOUCH_END);
         this.feedBtnPremium.off(Node.EventType.TOUCH_END);
-        this.feedBtnNormal.on(Node.EventType.TOUCH_END, this.feedNormal, this);
-        this.feedBtnPremium.on(Node.EventType.TOUCH_END, this.feedPremium, this);
+        this.genderPotionBtn.off(Node.EventType.TOUCH_END);
+        this.upgradePotionBtn.off(Node.EventType.TOUCH_END);
+        this.coldMedicineBtn.off(Node.EventType.TOUCH_END);
 
-        // 情緒圖 (優先序：SwimmingFish 傳來的 > 目前心情 > 重新計算)
+        // 只有「非唯讀」才綁定事件
+        if (!isReadOnly) {
+            this.feedBtnNormal.on(Node.EventType.TOUCH_END, this.feedNormal, this);
+            this.feedBtnPremium.on(Node.EventType.TOUCH_END, this.feedPremium, this);
+            this.genderPotionBtn.on(Node.EventType.TOUCH_END, this.onUseGenderPotion, this);
+            this.upgradePotionBtn.on(Node.EventType.TOUCH_END, this.onUseUpgradePotion, this);
+            this.coldMedicineBtn.on(Node.EventType.TOUCH_END, this.onUseColdMedicine, this);
+        }
+
+        // 鎖定互動
+        this.feedBtnNormal.getComponent(Button)!.interactable = !isReadOnly;
+        this.feedBtnPremium.getComponent(Button)!.interactable = !isReadOnly;
+        this.genderPotionBtn.getComponent(Button)!.interactable = !isReadOnly;
+        this.upgradePotionBtn.getComponent(Button)!.interactable = !isReadOnly;
+        this.coldMedicineBtn.getComponent(Button)!.interactable = !isReadOnly;
+        this.renameButton.getComponent(Button)!.interactable = !isReadOnly;
+        this.fashionTabButton.getComponent(Button)!.interactable = !isReadOnly;
+        this.healTabButton.getComponent(Button)!.interactable = !isReadOnly;
+
+        // 情緒圖 (優先使用 SwimmingFish 傳來的 sprite)
         if (emotionSprite) {
             this.fishStatusImage.spriteFrame = emotionSprite;
         } else {
+            const playerData = await DataManager.getPlayerDataCached();
             const currentEmotion = fish.emotion as any;
             if (currentEmotion) {
                 const sf = SwimmingFish.getEmotionSpriteByKey(currentEmotion);
@@ -152,7 +195,6 @@ export class FishDetailManager extends Component {
                 this.fishStatusImage.spriteFrame = sf;
             }
         }
-
     }
 
     /** 餵食 */
@@ -293,6 +335,16 @@ export class FishDetailManager extends Component {
             this.showFloatingTextRightOf(this.fishStatusImage.node, '已治癒！');
             await this.showFishDetail(fish);
         }
+    }
+
+    private setButtonEnabled(node: Node, enabled: boolean) {
+        node.getComponent(Button)?.node && (node.getComponent(Button)!.interactable = enabled);
+        // 視覺：半透明顯示停用
+        let op = node.getComponent(UIOpacity);
+        if (!op) {
+            op = node.addComponent(UIOpacity);
+        }
+        op.opacity = enabled ? 255 : 120;
     }
 
     showFloatingTextRightOf(targetNode: Node, text: string) {

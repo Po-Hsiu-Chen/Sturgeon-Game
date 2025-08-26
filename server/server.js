@@ -306,8 +306,54 @@ app.get('/public/player/:userId', async (req, res) => {
     }
   );
   if (!doc) return res.status(404).json({ error: 'not found' });
-  res.json(doc);
+
+  // ---- 把 fishList 補齊成完整 FishData ----
+  const nowISO = new Date().toISOString();
+  const fullFishList = (doc.fishList ?? []).map(f => ({
+    id: f.id,
+    name: f.name ?? `Fish_${f.id}`,
+    gender: f.gender ?? 'male',
+    stage: f.stage ?? 1,
+    growthDaysPassed: f.growthDaysPassed ?? 0,
+    lastFedDate: f.lastFedDate ?? nowISO,
+    hunger: f.hunger ?? 0,
+    hungerRateMultiplier: f.hungerRateMultiplier ?? 1,
+    appearance: f.appearance ?? 'beautiful',
+    outfit: {
+      head: f.outfit?.head ?? null,
+      accessories: f.outfit?.accessories ?? []
+    },
+    isMarried: f.isMarried ?? false,
+    spouseId: f.spouseId ?? null,
+    status: {
+      hungry: f.status?.hungry ?? false,
+      hot: f.status?.hot ?? false,
+      cold: f.status?.cold ?? false,
+      sick: f.status?.sick ?? false,
+    },
+    emotion: f.emotion ?? 'happy',
+    isDead: !!f.isDead,
+    deathDate: f.deathDate ?? undefined,
+    tankId: f.tankId ?? (doc.tankList?.[0]?.id ?? 1),
+  }));
+
+  // 過濾掉不存在的 fishId，避免舊資料殘留
+  const tankIds = new Set(fullFishList.map(fi => fi.id));
+  const cleanTankList = (doc.tankList ?? []).map(t => ({
+    ...t,
+    fishIds: (t.fishIds ?? []).filter(fid => tankIds.has(fid)),
+  }));
+
+  res.json({
+    userId: doc.userId,
+    displayName: doc.displayName,
+    picture: doc.picture,
+    tankEnvironment: doc.tankEnvironment,
+    tankList: cleanTankList,
+    fishList: fullFishList,
+  });
 });
+
 
 /** 發送好友邀請 */
 app.post('/friend-requests', async (req, res) => {

@@ -1,15 +1,22 @@
-import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, UITransform, Vec3, Button, SpriteFrame, ImageAsset, Texture2D } from 'cc';
+import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, UITransform, Vec3, Button, SpriteFrame, ImageAsset, Texture2D, Color } from 'cc';
 import { SwimmingFish } from './SwimmingFish';
-import { DataManager, PlayerData } from './DataManager';
+import { DataManager, FishData, PlayerData } from './DataManager';
 import { FishLogic } from './FishLogic';
 import { TombManager } from './TombManager';
 import { TankEnvironmentManager } from './TankEnvironmentManager';
-import { getOrCreateUserId } from './utils/utils';
 import { showFloatingTextCenter } from './utils/UIUtils';
 import { initLiff, getIdentity } from './bridge/LiffBridge';
 import { authWithLine } from './api/Api';
 const { ccclass, property } = _decorator;
 const LIFF_ID = '2007937783-PJ4ZRBdY';
+const RED = new Color(255, 0, 0, 255);    // 紅色
+const GREEN = new Color(0, 255, 0, 255);  // 綠色
+const BLUE = new Color(0, 0, 255, 255);   // 藍色
+
+const TankAssets = {
+    backgrounds: new Map<string, SpriteFrame>(),
+    decorations: new Map<string, Prefab>(),
+};
 
 @ccclass('GameManager')
 export class GameManager extends Component {
@@ -17,12 +24,13 @@ export class GameManager extends Component {
     @property(TombManager) tombManager: TombManager = null!;
 
     // 魚缸與魚類
+    @property(Node) activeTankViewport: Node = null!;
     @property(Node) fishArea: Node = null!;                     // 魚活動區域
+    @property(SpriteFrame) defaultBackgroundSpriteFrame: SpriteFrame = null!; // 預設魚缸背景
     @property([Prefab]) maleFishPrefabsByStage: Prefab[] = [];  // 公魚：第 1~6 階
     @property([Prefab]) femaleFishPrefabsByStage: Prefab[] = [];// 母魚：第 1~6 階
     @property([Button]) tankButtons: Button[] = [];             // 魚缸按鈕
     @property(Button) tombTankBtn: Button = null!;              // 墓地魚缸按鈕
-    @property([Node]) tankNodes: Node[] = [];                   // 魚缸節點
     @property(Node) tombTankNode: Node = null!;                 // 墓地魚缸節點
 
     // 簽到面板
@@ -67,11 +75,18 @@ export class GameManager extends Component {
     @property(SpriteFrame) defaultAvatar: SpriteFrame = null!;
 
     @property(Node) floatingNode: Node = null!;
+    @property(Button) backToMyTankBtn: Button = null!;
+
+    //錢
+    @property(Label) dragonboneLabel: Label = null!;  
+
+    //魚數量
+    @property(Label) fishCountLabel: Label = null!;
 
     private confirmCallback: Function | null = null;         // 確認回調
     private currentTankId: number = 1;                       // 當前魚缸 ID
     private playerData: PlayerData | null = null;
-    private userId: string = getOrCreateUserId();
+    private isViewingFriend = false;
 
     /** 初始化 */
     async start() {
@@ -174,6 +189,9 @@ export class GameManager extends Component {
         this.heaterBtn?.node.on(Node.EventType.TOUCH_END, () => this.onClickHeater());
         this.fanBtn?.node.on(Node.EventType.TOUCH_END, () => this.onClickFan());
         this.brushBtn?.node.on(Node.EventType.TOUCH_END, () => this.onClickBrush());
+
+        // 返回按鈕
+        this.backToMyTankBtn?.node.on(Node.EventType.TOUCH_END, () => this.backToMyTank());
     }
 
     /** 初始化對話框事件 */
@@ -213,63 +231,162 @@ export class GameManager extends Component {
         this.tombHintCloseBtn.node.on(Node.EventType.TOUCH_END, () => {
             this.tombHintPanel.active = false;
         });
+
+        // 隱藏返回按鈕
+        if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = false;
     }
 
-    async switchTank(tankId: number) {
-        this.playerData = await DataManager.getPlayerDataCached();
-        this.tankNodes.forEach((node, idx) => {
-            node.active = (idx + 1) === tankId;
-        });
-        this.tombTankNode.active = false;
+    private getActiveViewport(): Node {
+        return this.activeTankViewport ?? this.node; // 總是用共用視窗來畫
+    }
 
-        this.fishArea.removeAllChildren();
+    /** 把任何一個 tank 畫進指定容器 */
+    private renderTankView(params: {
+        container: Node;
+        tank: { id: number; backgroundId?: string; decorations?: any[]; fishIds: number[] };
+        fishList: FishData[];
+        malePrefabs: Prefab[];
+        femalePrefabs: Prefab[];
+        envForEmotion: any;
+        readOnly: boolean;
+    }) {
+        const { container, tank, fishList, malePrefabs, femalePrefabs, envForEmotion, readOnly } = params;
+        const bgNode = container.getChildByName('Background');
+        const decoLayer = container.getChildByName('DecoLayer');  // 可能不存在
+        const fishArea = container.getChildByName('FishArea') || this.fishArea; // 保底用 GameManager 的 fishArea
 
-        const tank = this.playerData.tankList.find(t => t.id === tankId);
-        if (!tank) {
-            console.warn(`找不到魚缸 ${tankId}`);
-            return;
+        // ---- 背景（可選）----
+        if (bgNode) {
+            const bgSprite = bgNode.getComponent(Sprite);
+            if (bgSprite) {
+                const sf = (tank.backgroundId && TankAssets.backgrounds.get(tank.backgroundId))
+                    || this.defaultBackgroundSpriteFrame;
+                if (sf) bgSprite.spriteFrame = sf;
+            }
         }
 
-        const area = this.fishArea.getComponent(UITransform)!;
-        const width = area.width;
-        const height = area.height;
-        const margin = 50;
+        // ---- 裝飾（可選）----
+        if (decoLayer) {
+            decoLayer.removeAllChildren();
+            for (const d of (tank.decorations ?? [])) {
+                const prefab = TankAssets.decorations.get(d.id);
+                if (!prefab) continue;
+                const n = instantiate(prefab);
+                n.setPosition(d.x ?? 0, d.y ?? 0, 0);
+                const sx = (d.flipX ? -1 : 1) * (d.scale ?? 1);
+                const sy = d.scale ?? 1;
+                n.setScale(sx, sy, 1);
+                n.setRotationFromEuler(0, 0, d.rotation ?? 0);
+                if (typeof d.zIndex === 'number') n.setSiblingIndex(d.zIndex);
+                decoLayer.addChild(n);
+            }
+        }
 
-        for (const fishId of tank.fishIds) {
-            const fish = this.playerData.fishList.find(f => f.id === fishId);
+        // ---- 魚 ----
+        fishArea.removeAllChildren();
+        const area = fishArea.getComponent(UITransform);
+        if (!area) return; // 沒有 UITransform 就不要畫，避免 crash
+
+        const width = area.width, height = area.height, margin = 50;
+
+        for (const fid of (tank.fishIds ?? [])) {
+            const fish = fishList.find(f => f.id === fid);
             if (!fish || fish.isDead) continue;
 
-            const prefab = fish.gender === "female"
-                ? this.femaleFishPrefabsByStage[fish.stage - 1]
-                : this.maleFishPrefabsByStage[fish.stage - 1];
-
+            const si = Math.max(0, (fish.stage || 1) - 1);
+            const prefab = fish.gender === 'female' ? femalePrefabs[si] : malePrefabs[si];
             if (!prefab) continue;
 
-            const fishNode = instantiate(prefab);
-            fishNode.name = `Fish_${fish.id}`;
+            const node = instantiate(prefab);
+            node.name = `Fish_${fish.id}`;
 
-            const randX = Math.random() * (width - margin * 2) - (width / 2 - margin);
-            const randY = Math.random() * (height - margin * 2) - (height / 2 - margin);
-            const direction = Math.random() > 0.5 ? 1 : -1;
+            // 只呼叫一次 setFishData，並把唯讀與環境一併傳入
+            const comp = node.getComponent(SwimmingFish);
+            comp?.setFishData(fish, { readOnly, env: envForEmotion });
 
-            fishNode.setPosition(randX, randY, 0);
-            fishNode.setScale(new Vec3(direction, 1, 1));
-            fishNode["initialDirection"] = direction;
+            // 位置/方向
+            const dir = Math.random() > 0.5 ? 1 : -1;
+            node.setPosition(
+                Math.random() * (width - margin * 2) - (width / 2 - margin),
+                Math.random() * (height - margin * 2) - (height / 2 - margin),
+                0
+            );
+            node.setScale(dir, 1, 1);
+            (node as any).initialDirection = dir;
 
-            const swimmingFish = fishNode.getComponent(SwimmingFish);
-            swimmingFish?.setFishData(fish);
-
-            this.fishArea.addChild(fishNode);
+            fishArea.addChild(node);
         }
+    }
+
+    /** 顯示自己的缸 */
+    async switchTank(tankId: number) {
+        this.isViewingFriend = false;
+
+        this.playerData = await DataManager.getPlayerDataCached();
+        const tank = this.playerData?.tankList.find(t => t.id === tankId);
+        if (!tank) return;
+
+        this.activeTankViewport.active = true;  // 顯示主視圖
+        this.tombTankNode.active = false;       // 關閉墓園
+
+        // 換回自己的頭像／名字／ID、隱藏返回鈕
+        await this.setHeaderUser(this.playerData.displayName, this.playerData.userId, this.playerData.picture);
+        if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = false;
 
         this.currentTankId = tankId;
+
+        this.renderTankView({
+            container: this.activeTankViewport,
+            tank,
+            fishList: this.playerData!.fishList,
+            malePrefabs: this.maleFishPrefabsByStage,
+            femalePrefabs: this.femaleFishPrefabsByStage,
+            envForEmotion: this.playerData!.tankEnvironment,    // 用自己的環境
+            readOnly: false                                     // 自己的魚非唯讀
+        });
+        await this.refreshEnvironmentUI();
+    }
+
+    /** 顯示朋友第一個缸 */
+    public showFriendTank(friend: Pick<PlayerData, 'tankList' | 'fishList' | 'tankEnvironment' | 'userId' | 'displayName'>) {
+        this.isViewingFriend = true;
+
+        const firstTank = friend.tankList?.[0];
+        if (!firstTank) { showFloatingTextCenter(this.floatingNode, '這位好友還沒有魚缸'); return; }
+
+        // 換成朋友頭像／名字／ID、顯示返回鈕
+        this.setHeaderUser(friend.displayName || friend.userId, friend.userId, (friend as any).picture);
+        if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = true;
+
+        const viewport = this.getActiveViewport();
+        this.renderTankView({
+            container: viewport,
+            tank: firstTank,
+            fishList: friend.fishList,
+            malePrefabs: this.maleFishPrefabsByStage,
+            femalePrefabs: this.femaleFishPrefabsByStage,
+            envForEmotion: friend.tankEnvironment,  // 用朋友的環境
+            readOnly: true                          // 朋友魚唯讀
+        });
+
+        if (friend.tankEnvironment) {
+            this.updateEnvironmentOverlays(friend.tankEnvironment);
+            this.temperatureLabel.string = `水溫 : ${friend.tankEnvironment.temperature.toFixed(1)}°C`;
+            this.waterQualityLabel.string = `水質 : ${friend.tankEnvironment.waterQualityStatus === 'clean' ? '乾淨' : '髒'}`;
+        }
+        showFloatingTextCenter(this.floatingNode, `${friend.displayName || friend.userId} 的魚缸`);
     }
 
     async switchToTombTank() {
-        this.tankNodes.forEach(node => node.active = false);
-        this.tombTankNode.active = true;
-
+        this.activeTankViewport.active = false; // 關閉主視圖
+        this.tombTankNode.active = true;        // 顯示墓園
         await this.tombManager?.refreshTombs();
+    }
+
+    /** 回到自己的第一缸 */
+    private async backToMyTank() {
+        if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = false;
+        await this.switchTank(1);
     }
 
     /** 處理魚飢餓與成長 */
@@ -483,14 +600,30 @@ export class GameManager extends Component {
         const items = this.playerData.inventory.items;
 
         // 水溫、水質顯示
-        if (this.temperatureLabel) this.temperatureLabel.string = `水溫 : ${env.temperature.toFixed(1)}°C`;
-        if (this.waterQualityLabel) this.waterQualityLabel.string = env.waterQualityStatus === 'clean' ? '水質 : 乾淨' : '水質 : 髒';
+        if (this.temperatureLabel) this.temperatureLabel.string = `${env.temperature.toFixed(1)}°C`;
+        if (env.temperature < this.minComfortTemp) {
+            this.temperatureLabel.color = BLUE; // 冷
+        } else if (env.temperature > this.maxComfortTemp) {
+            this.temperatureLabel.color = RED;  // 熱
+        }
+        else {
+            this.temperatureLabel.color = GREEN; // 正常
+        }
+        
+        if (this.waterQualityLabel) this.waterQualityLabel.string = env.waterQualityStatus === 'clean' ? 'Clean' : 'Dirty';
+        if (this.waterQualityLabel) this.waterQualityLabel.color = env.waterQualityStatus === 'clean' ? GREEN : RED;
 
         // 顯示髒水遮罩
         if (this.dirtyWaterOverlay) {
             this.dirtyWaterOverlay.active = (env.waterQualityStatus !== 'clean');
         }
 
+        //顯示龍骨數量
+        if (this.dragonboneLabel) this.dragonboneLabel.string = this.playerData.dragonBones.toString();
+
+        //顯示魚數量
+        if(this.fishCountLabel) this.fishCountLabel.string = this.playerData.fishList.length.toString();
+        
         // 道具數量
         if (this.heaterCountLabel) this.heaterCountLabel.string = `${items.heater}`;
         if (this.fanCountLabel) this.fanCountLabel.string = `${items.fan}`;
@@ -643,11 +776,15 @@ export class GameManager extends Component {
         this.confirmDialogPanel.active = true;
     }
 
-    public showFriendTank(friendData: {
-        userId: string, displayName?: string,
-        tankEnvironment: any, tankList: any[], fishList: any[]
-    }) {
+    private async setHeaderUser(displayName: string, userId: string, picture?: string) {
+        this.userNameLabel.string = displayName || "未命名";
+        this.userIdLabel.string = userId || "";
 
+        if (picture) {
+            await this.loadAvatar(picture);
+        } else {
+            this.userAvatar.spriteFrame = this.defaultAvatar;
+        }
     }
 
 }

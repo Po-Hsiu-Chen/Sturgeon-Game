@@ -135,7 +135,7 @@ export class FriendPanel extends Component {
                 }
 
                 const viewBtn = row.getChildByName('ViewBtn')?.getComponent(Button);
-                viewBtn?.node.once(Button.EventType.CLICK, () => this.onViewFriendTank(f.userId), this);
+                viewBtn?.node.on(Button.EventType.CLICK, () => this.onViewFriendTank(f.userId), this);
 
                 row.parent = list;
             }
@@ -304,6 +304,9 @@ export class FriendPanel extends Component {
             const friendData = await DataManager.getPublicPlayerData(friendUserId);
             const gm = this.node.scene.getChildByName('GameManager')?.getComponent(GameManager);
             gm?.showFriendTank(friendData);
+
+            // 到朋友魚缸後，隱藏 FriendPanel
+            this.node.active = false;
         } catch (e) {
             console.warn('getPublicPlayerData failed:', e);
             showFloatingTextCenter(this.floatingNode, '載入好友資料失敗');

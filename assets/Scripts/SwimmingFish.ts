@@ -1,6 +1,6 @@
 import { _decorator, Component, Vec3, Node, find, UITransform, Sprite, SpriteFrame, Prefab, tween, Label } from 'cc';
 import { FishDetailManager } from './FishDetailManager';
-import { DataManager, type FishData } from './DataManager';
+import { type FishData } from './DataManager';
 const { ccclass, property } = _decorator;
 
 @ccclass('SwimmingFish')
@@ -9,6 +9,11 @@ export class SwimmingFish extends Component {
     // 與魚資料相關的屬性
     public fishData: FishData = null!;                       // 魚的資料（從 GameManager 傳入）
     static currentSelectedFish: SwimmingFish | null = null;  // 目前被選中的魚
+
+    // 互動/唯讀 與 表情用環境 
+    @property
+    public interactive: boolean = true;      // 朋友魚 => false
+    private _envForEmotion: any = null;      // 用來算情緒的環境（自己 or 朋友的環境）
 
     // Movement 
     private isMovingRight = false;   // 目前是否朝右移動
@@ -82,38 +87,34 @@ export class SwimmingFish extends Component {
 
     }
 
-    public setFishData(fish: FishData) {
+    public setFishData(fish: FishData, opts?: { readOnly?: boolean; env?: any }) {
         this.fishData = fish;
+        if (opts && 'readOnly' in opts) {
+            this.interactive = !opts.readOnly!;
+        }
+        if (opts?.env) {
+            this._envForEmotion = opts.env;
+        }
     }
 
     async onClickFish() {
+        // if (!this.interactive) return; // 不讓朋友魚有任何點擊反應 (暫定)
         if (!this.emotionBubble) return;
 
-        // 同一條：改成關閉
         if (SwimmingFish.currentSelectedFish === this) {
             this.emotionBubble.active = false;
             SwimmingFish.currentSelectedFish = null;
             return;
         }
-
-        // 關掉前一條
         if (SwimmingFish.currentSelectedFish) {
             SwimmingFish.currentSelectedFish.emotionBubble!.active = false;
         }
-
-        // 先標記這條為選取，避免 update() 把泡泡關掉
         SwimmingFish.currentSelectedFish = this;
 
-        // 再開泡泡與動畫
         this.emotionBubble.active = true;
         this.emotionBubble.setScale(new Vec3(0.3, 0.3, 1));
-
-        // 這裡即使 await，update() 也不會把它關掉了
         await this.updateBubbleEmotionIcon();
-
-        tween(this.emotionBubble)
-            .to(0.25, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' })
-            .start();
+        tween(this.emotionBubble).to(0.25, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
     }
 
 
@@ -128,28 +129,25 @@ export class SwimmingFish extends Component {
     }
 
     async onClickMagnifier() {
-        const playerData = await DataManager.getPlayerDataCached();
-        const fishId = parseInt(this.node.name.split('_')[1]);
-        const fishData = playerData.fishList.find(f => f.id === fishId);
-
+        if (!this.fishData) return;
         const fishDetailManager = find('/GameManager')?.getComponent(FishDetailManager);
+        if (!fishDetailManager) return;
 
-        // 若泡泡還沒開（或沒算過），就算一次，否則用快取
         if (!this._lastEmotionSprite) {
             await this.updateBubbleEmotionIcon();
         }
-        fishDetailManager.showFishDetail(fishData, this._lastEmotionSprite || null);
+
+        const readOnly = !this.interactive; // 朋友魚唯讀
+        fishDetailManager.showFishDetail(this.fishData, this._lastEmotionSprite || null, { readOnly });
     }
 
     private async updateBubbleEmotionIcon() {
-        if (!this.emotionSprite) return;
-        const playerData = await DataManager.getPlayerDataCached();
-        const env = playerData?.tankEnvironment;
+        if (!this.emotionSprite || !this.fishData) return;
+        const env = this._envForEmotion || null; // 不回頭查 DataManager 了
         const emo = SwimmingFish.computeEmotion(this.fishData, env);
         const sf = SwimmingFish.getEmotionSpriteByKey(emo);
         if (sf) {
             this.emotionSprite.spriteFrame = sf;
-            // 快取
             this._lastEmotion = emo;
             this._lastEmotionSprite = sf;
         }

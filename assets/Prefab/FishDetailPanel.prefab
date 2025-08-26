@@ -5087,7 +5087,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "ChangeBtn",
+    "_name": "ChangePotioBtn",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {

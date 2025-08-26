@@ -41,7 +41,7 @@ export interface FishData {
 }
 
 /** 魚缸環境狀態 */
-interface TankEnvironment {
+export interface TankEnvironment {
     temperature: number;                    // 當前水溫（°C）
     lastTempUpdateTime: string;             // 上次更新水溫的時間
     waterQualityStatus: "clean" | "dirty";  // 水質狀態
@@ -52,11 +52,21 @@ interface TankEnvironment {
 }
 
 /** 魚缸 */
-interface TankData {
+export interface TankData {
     id: number;             // 魚缸 ID
     name: string;           // 魚缸名稱
     comfort: number;        // 舒適度（0~100 暫定）
     fishIds: number[];      // 此魚缸內的魚 ID 陣列
+    backgroundId?: string;  // 背景樣式，例如 'bg_coral_01'
+    decorations?: Array<{
+        id: string;           // 裝飾資產 id，例如 'deco_shell_02'
+        x: number;            // 位置（以 UITransform 左上為原點或中心，固定一種）
+        y: number;
+        scale?: number;       // 預設 1
+        rotation?: number;    // 預設 0
+        zIndex?: number;      // 圖層順序，預設 0（背景前/魚後等可自訂）
+        flipX?: boolean;      // 可選
+    }>;
 }
 
 /** 玩家資料 */
@@ -407,11 +417,13 @@ export class DataManager {
     }
 
     /** 取得好友的公開玩家資料（用於顯示魚缸） */
-    static async getPublicPlayerData(friendUserId: string) {
+    static async getPublicPlayerData(friendUserId: string)
+        : Promise<Pick<PlayerData, 'userId' | 'displayName' | 'picture' | 'tankEnvironment' | 'tankList' | 'fishList'>> {
         const res = await fetch(`${this.apiBase}/public/player/${encodeURIComponent(friendUserId)}`);
         if (!res.ok) throw new Error(await res.text());
-        return await res.json(); // 僅含 fishList, tankList, tankEnvironment, displayName...
+        return await res.json();
     }
+
 
     /** 取得推薦玩家（隨機） */
     static async getRecommendedUsers(count = 5): Promise<Array<{ userId: string, displayName?: string, picture?: string }>> {
@@ -429,4 +441,87 @@ export class DataManager {
         }
     }
 
+    /** 後端購買（優先） */
+    static async purchaseViaApi(sku: string, qty = 1): Promise<PlayerData> {
+        const id = this.currentUserId;
+        if (!id) throw new Error('no current user');
+        const res = await fetch(`${this.apiBase}/purchase`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: id, sku, qty })
+        });
+        if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error(`purchase failed: ${res.status} ${text}`);
+        }
+        const fresh = await res.json();
+        // 同步快取與廣播
+        this._snapshot = fresh;
+        this._snapshotTime = Date.now();
+        this._emit(fresh);
+        return fresh;
+    }
+
+    /** 本地 fallback：依 SKU 直接改 PlayerData 再存回 */
+    static async purchaseFallback(sku: string, qty: number, unitPrice: number): Promise<PlayerData> {
+        const pd = await this.getPlayerDataCached({ refresh: true });
+        if (!pd) throw new Error('no player data');
+
+        const total = unitPrice * qty;
+        if ((pd.dragonBones ?? 0) < total) {
+            const e: any = new Error('NOT_ENOUGH');
+            e.code = 'NOT_ENOUGH';
+            throw e;
+        }
+        pd.dragonBones = (pd.dragonBones ?? 0) - total;
+
+        // 映射 SKU -> inventory 欄位
+        const addItem = (path: string, add: number) => {
+            // 簡易路徑設定器：feeds.normal / items.heater 等
+            const [root, key] = path.split('.');
+            (pd.inventory as any)[root][key] = ((pd.inventory as any)[root][key] ?? 0) + add;
+        };
+
+        const APPLY: Record<string, (n: number) => void> = {
+            'med_trans': (n) => addItem('items.genderPotion', n),
+            'med_change': (n) => addItem('items.changePotion', n),
+            'med_cold': (n) => addItem('items.coldMedicine', n),
+            'med_lvup': (n) => addItem('items.upgradePotion', n),
+            'med_revive': (n) => addItem('items.revivePotion', n),
+            'feed_normal': (n) => addItem('feeds.normal', n),
+            'feed_high': (n) => addItem('feeds.premium', n),
+            'env_brush': (n) => addItem('items.brush', n),
+            'env_fan': (n) => addItem('items.fan', n),
+            'heater': (n) => addItem('items.heater', n),
+        };
+
+        if (APPLY[sku]) {
+            APPLY[sku](qty);
+        } else {
+            // 非消耗型/時裝之類：示意把 sku 放到 fashion.owned
+            if (!pd.fashion.owned.includes(sku)) pd.fashion.owned.push(sku);
+        }
+
+        const fresh = await this.savePlayerDataWithCache(pd);
+        return fresh;
+    }
+
+    /** 高階購買：先嘗試後端，失敗才 fallback */
+    static async purchase(sku: string, qty = 1, unitPrice?: number): Promise<{ ok: true, player: PlayerData } | { ok: false, error: string }> {
+        try {
+            const player = await this.purchaseViaApi(sku, qty);
+            return { ok: true, player };
+        } catch (e: any) {
+            // 若沒有後端或報 404/5xx，可走本地 fallback，但需要單價
+            if (unitPrice == null) {
+                return { ok: false, error: e?.message || 'PURCHASE_FAILED' };
+            }
+            try {
+                const player = await this.purchaseFallback(sku, qty, unitPrice);
+                return { ok: true, player };
+            } catch (e2: any) {
+                return { ok: false, error: e2?.code || e2?.message || 'PURCHASE_FAILED' };
+            }
+        }
+    }
 }
