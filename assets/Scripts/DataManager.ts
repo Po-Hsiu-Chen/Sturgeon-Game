@@ -499,7 +499,9 @@ export class DataManager {
             APPLY[sku](qty);
         } else {
             // 非消耗型/時裝之類：示意把 sku 放到 fashion.owned
-            if (!pd.fashion.owned.includes(sku)) pd.fashion.owned.push(sku);
+            if (pd.fashion.owned.indexOf(sku) === -1) {
+                pd.fashion.owned.push(sku);
+            }
         }
 
         const fresh = await this.savePlayerDataWithCache(pd);

@@ -60848,6 +60848,9 @@
     "confirmDialogText": null,
     "confirmDialogYesButton": null,
     "confirmDialogNoButton": null,
+    "floatingNode": {
+      "__id__": 1064
+    },
     "_id": "08+5q0uRFO5Itew+1Q4bkr"
   },
   {

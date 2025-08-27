@@ -78,16 +78,17 @@ export class GameManager extends Component {
     @property(Button) backToMyTankBtn: Button = null!;
 
     //錢
-    @property(Label) dragonboneLabel: Label = null!;  
+    @property(Label) dragonboneLabel: Label = null!;
 
     //魚數量
     @property(Label) fishCountLabel: Label = null!;
 
     private confirmCallback: Function | null = null;         // 確認回調
     private currentTankId: number = 1;                       // 當前魚缸 ID
-    private offDMChange: (() => void) | null = null; 
+    private offDMChange: (() => void) | null = null;
     private playerData: PlayerData | null = null;
     private isViewingFriend = false;
+    private viewingFriend: Pick<PlayerData, 'tankList' | 'fishList' | 'tankEnvironment' | 'userId' | 'displayName'> | null = null;
 
     /** 初始化 */
     async start() {
@@ -142,10 +143,10 @@ export class GameManager extends Component {
         await this.refreshEnvironmentUI();
 
         this.offDMChange = DataManager.onChange((p) => {
-        // 任何時候玩家資料被更新（包含購買扣龍骨），都會進到這裡
-        this.playerData = p;
-        // 立即刷新畫面上的顯示（龍骨數、道具數、環境按鈕等）
-        void this.refreshEnvironmentUI();
+            // 任何時候玩家資料被更新（包含購買扣龍骨），都會進到這裡
+            this.playerData = p;
+            // 立即刷新畫面上的顯示（龍骨數、道具數、環境按鈕等）
+            void this.refreshEnvironmentUI();
         });
 
         // 顯示基本資料
@@ -186,7 +187,7 @@ export class GameManager extends Component {
     initButtons() {
         // 魚缸切換按鈕
         this.tankButtons.forEach((btn, index) => {
-            btn.node.on(Node.EventType.TOUCH_END, () => this.switchTank(index + 1));
+            btn.node.on(Node.EventType.TOUCH_END, () => this.onClickTankButton(index));
         });
 
         // 墓園魚缸
@@ -325,6 +326,14 @@ export class GameManager extends Component {
         }
     }
 
+    private onClickTankButton(index: number) {
+        if (this.isViewingFriend && this.viewingFriend) {
+            this.renderFriendTankByIndex(index);
+        } else {
+            this.switchTank(index + 1);
+        }
+    }
+
     /** 顯示自己的缸 */
     async switchTank(tankId: number) {
         this.isViewingFriend = false;
@@ -354,9 +363,10 @@ export class GameManager extends Component {
         await this.refreshEnvironmentUI();
     }
 
-    /** 顯示朋友第一個缸 */
+    /** 顯示朋友魚缸 */
     public showFriendTank(friend: Pick<PlayerData, 'tankList' | 'fishList' | 'tankEnvironment' | 'userId' | 'displayName'>) {
         this.isViewingFriend = true;
+        this.viewingFriend = friend;
 
         const firstTank = friend.tankList?.[0];
         if (!firstTank) { showFloatingTextCenter(this.floatingNode, '這位好友還沒有魚缸'); return; }
@@ -365,6 +375,10 @@ export class GameManager extends Component {
         this.setHeaderUser(friend.displayName || friend.userId, friend.userId, (friend as any).picture);
         if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = true;
 
+        // 隱藏墓地按鈕、遮蔽金錢
+        if (this.tombTankBtn) this.tombTankBtn.node.active = false;
+        if (this.dragonboneLabel) this.dragonboneLabel.string = '保密';
+
         const viewport = this.getActiveViewport();
         this.renderTankView({
             container: viewport,
@@ -372,26 +386,89 @@ export class GameManager extends Component {
             fishList: friend.fishList,
             malePrefabs: this.maleFishPrefabsByStage,
             femalePrefabs: this.femaleFishPrefabsByStage,
-            envForEmotion: friend.tankEnvironment,  // 用朋友的環境
-            readOnly: true                          // 朋友魚唯讀
+            envForEmotion: friend.tankEnvironment,
+            readOnly: true
         });
 
-        if (friend.tankEnvironment) {
-            this.updateEnvironmentOverlays(friend.tankEnvironment);
-            this.temperatureLabel.string = `水溫 : ${friend.tankEnvironment.temperature.toFixed(1)}°C`;
-            this.waterQualityLabel.string = `水質 : ${friend.tankEnvironment.waterQualityStatus === 'clean' ? '乾淨' : '髒'}`;
+        const env = friend.tankEnvironment;
+        this.updateEnvironmentOverlays(env);
+
+        // 溫度：數值 + 色彩（藍／綠／紅）
+        if (this.temperatureLabel) {
+            this.temperatureLabel.string = `${env.temperature.toFixed(1)}°C`;
+            if (env.temperature < this.minComfortTemp) {
+                this.temperatureLabel.color = BLUE;
+            } else if (env.temperature > this.maxComfortTemp) {
+                this.temperatureLabel.color = RED;
+            } else {
+                this.temperatureLabel.color = GREEN;
+            }
         }
+
+        // 水質：Clean / Dirty + 色彩（綠／紅）
+        if (this.waterQualityLabel) {
+            this.waterQualityLabel.string = (env.waterQualityStatus === 'clean') ? 'Clean' : 'Dirty';
+            this.waterQualityLabel.color = (env.waterQualityStatus === 'clean') ? GREEN : RED;
+        }
+
         showFloatingTextCenter(this.floatingNode, `${friend.displayName || friend.userId} 的魚缸`);
+    }
+
+    private renderFriendTankByIndex(idx: number) {
+        if (!this.viewingFriend) return;
+        const friend = this.viewingFriend;
+        const tank = friend.tankList?.[idx];
+        if (!tank) {
+            showFloatingTextCenter(this.floatingNode, '這個朋友沒有此魚缸');
+            return;
+        }
+
+        const viewport = this.getActiveViewport();
+        this.renderTankView({
+            container: viewport,
+            tank,
+            fishList: friend.fishList,
+            malePrefabs: this.maleFishPrefabsByStage,
+            femalePrefabs: this.femaleFishPrefabsByStage,
+            envForEmotion: friend.tankEnvironment,
+            readOnly: true,
+        });
+
+        // 溫度 / 水質顯示（用自己頁面一致的風格）
+        const env = friend.tankEnvironment;
+        this.updateEnvironmentOverlays(env);
+        if (this.temperatureLabel) {
+            this.temperatureLabel.string = `${env.temperature.toFixed(1)}°C`;
+            this.temperatureLabel.color =
+                env.temperature < this.minComfortTemp ? BLUE :
+                    env.temperature > this.maxComfortTemp ? RED : GREEN;
+        }
+        if (this.waterQualityLabel) {
+            this.waterQualityLabel.string = env.waterQualityStatus === 'clean' ? 'Clean' : 'Dirty';
+            this.waterQualityLabel.color = env.waterQualityStatus === 'clean' ? GREEN : RED;
+        }
+
+        // 朋友的金錢顯示遮蔽
+        if (this.dragonboneLabel) this.dragonboneLabel.string = '保密';
     }
 
     async switchToTombTank() {
         this.activeTankViewport.active = false; // 關閉主視圖
         this.tombTankNode.active = true;        // 顯示墓園
+
+        // 墓地魚缸不顯示環境遮罩
+        if (this.dirtyWaterOverlay) this.dirtyWaterOverlay.active = false;
+        if (this.coldOverlay) this.coldOverlay.active = false;
+        if (this.hotOverlay) this.hotOverlay.active = false;
+
         await this.tombManager?.refreshTombs();
     }
 
     /** 回到自己的第一缸 */
     private async backToMyTank() {
+        this.isViewingFriend = false;
+        this.viewingFriend = null; // 清掉朋友狀態
+        if (this.tombTankBtn) this.tombTankBtn.node.active = true; // 顯示墓地按鈕回來
         if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = false;
         await this.switchTank(1);
     }
@@ -616,7 +693,7 @@ export class GameManager extends Component {
         else {
             this.temperatureLabel.color = GREEN; // 正常
         }
-        
+
         if (this.waterQualityLabel) this.waterQualityLabel.string = env.waterQualityStatus === 'clean' ? 'Clean' : 'Dirty';
         if (this.waterQualityLabel) this.waterQualityLabel.color = env.waterQualityStatus === 'clean' ? GREEN : RED;
 
@@ -629,8 +706,8 @@ export class GameManager extends Component {
         if (this.dragonboneLabel) this.dragonboneLabel.string = this.playerData.dragonBones.toString();
 
         //顯示魚數量
-        if(this.fishCountLabel) this.fishCountLabel.string = this.playerData.fishList.length.toString();
-        
+        if (this.fishCountLabel) this.fishCountLabel.string = this.playerData.fishList.length.toString();
+
         // 道具數量
         if (this.heaterCountLabel) this.heaterCountLabel.string = `${items.heater}`;
         if (this.fanCountLabel) this.fanCountLabel.string = `${items.fan}`;
@@ -773,6 +850,14 @@ export class GameManager extends Component {
     }
 
     private updateEnvironmentOverlays(env: any) {
+        // 墓地魚缸不顯示遮罩
+        if (this.tombTankNode && this.tombTankNode.active) {
+            if (this.dirtyWaterOverlay) this.dirtyWaterOverlay.active = false;
+            if (this.coldOverlay) this.coldOverlay.active = false;
+            if (this.hotOverlay) this.hotOverlay.active = false;
+            return;
+        }
+
         const isDirty = env.waterQualityStatus !== 'clean';
         const tooCold = env.temperature < this.minComfortTemp;
         const tooHot = env.temperature > this.maxComfortTemp;

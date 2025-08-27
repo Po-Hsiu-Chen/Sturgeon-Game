@@ -3,7 +3,8 @@ import { SwimmingFish } from './SwimmingFish';
 import { FishLogic } from './FishLogic';
 import { GameManager } from './GameManager';
 import { DataManager, FishData } from './DataManager';
-import { playOpenPanelAnim } from './utils/UIUtils';
+import { playOpenPanelAnim, showFloatingTextCenter } from './utils/UIUtils';
+
 const { ccclass, property } = _decorator;
 
 @ccclass('FishDetailManager')
@@ -35,7 +36,7 @@ export class FishDetailManager extends Component {
     @property(Label) coldMedicineCountLabel: Label = null!;
     @property(Node) changePotionBtn: Node = null!;
     @property(Label) changePotionCountLabel: Label = null!;
-    
+
     // Feed 相關
     @property(Node) feedSection: Node = null!;
     @property(Node) feedTabButton: Node = null!;
@@ -67,6 +68,8 @@ export class FishDetailManager extends Component {
     @property(Label) confirmDialogText: Label = null!;
     @property(Node) confirmDialogYesButton: Node = null!;
     @property(Node) confirmDialogNoButton: Node = null!;
+
+    @property(Node) floatingNode: Node = null!; 
 
     private currentFishId: number = -1;
     private confirmCallback: Function | null = null;
@@ -268,9 +271,16 @@ export class FishDetailManager extends Component {
 
     }
 
-    /** 道具使用：變性 */
+    /** 道具使用：變性藥 */
     onUseGenderPotion() {
-        this.showConfirmDialog("確定要使用變性藥嗎？", () => this.useGenderPotion());
+        this.getCurrentFishAndPlayer().then(({ playerData, fish }) => {
+            if (!playerData || !fish) return;
+            if (playerData.inventory.items.genderPotion <= 0) {
+                showFloatingTextCenter(this.floatingNode, '沒有變性藥了');
+                return;
+            }
+            this.showConfirmDialog('確定要使用變性藥嗎？', () => this.useGenderPotion());
+        });
     }
     private async useGenderPotion() {
         const playerData = await DataManager.getPlayerDataCached();
@@ -290,9 +300,16 @@ export class FishDetailManager extends Component {
         }
     }
 
-    /** 道具使用：升級 */
+    /** 道具使用：升級藥 */
     onUseUpgradePotion() {
-        this.showConfirmDialog("確定要使用升級藥嗎？", () => this.useUpgradePotion());
+        this.getCurrentFishAndPlayer().then(({ playerData, fish }) => {
+            if (!playerData || !fish) return;
+            if (playerData.inventory.items.upgradePotion <= 0) {
+                showFloatingTextCenter(this.floatingNode, '沒有升級藥了');
+                return;
+            }
+            this.showConfirmDialog('確定要使用升級藥嗎？', () => this.useUpgradePotion());
+        });
     }
     private async useUpgradePotion() {
         const playerData = await DataManager.getPlayerDataCached();
@@ -316,7 +333,21 @@ export class FishDetailManager extends Component {
 
     /** 道具使用：感冒藥 */
     onUseColdMedicine() {
-        this.showConfirmDialog("確定要使用感冒藥嗎？", () => this.useColdMedicine());
+        this.getCurrentFishAndPlayer().then(({ playerData, fish }) => {
+            if (!playerData || !fish) return;
+            if (playerData.inventory.items.coldMedicine <= 0) {
+                showFloatingTextCenter(this.floatingNode, '沒有感冒藥了');
+                return;
+            }
+
+            // 沒生病就不能用
+            if (!fish.status || !fish.status.sick) {
+                showFloatingTextCenter(this.floatingNode, '這隻魚沒有生病');
+                return;
+            }
+
+            this.showConfirmDialog('確定要使用感冒藥嗎？', () => this.useColdMedicine());
+        });
     }
     private async useColdMedicine() {
         const playerData = await DataManager.getPlayerDataCached();
@@ -345,6 +376,12 @@ export class FishDetailManager extends Component {
             op = node.addComponent(UIOpacity);
         }
         op.opacity = enabled ? 255 : 120;
+    }
+
+    private async getCurrentFishAndPlayer() {
+        const playerData = await DataManager.getPlayerDataCached();
+        const fish = playerData?.fishList.find(f => f.id === this.currentFishId) as FishData | undefined;
+        return { playerData, fish };
     }
 
     showFloatingTextRightOf(targetNode: Node, text: string) {

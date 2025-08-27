@@ -21,9 +21,9 @@ export class StoreState {
   public currentCategory = '全部';
   public catalog: CatalogItem[] = [];
 
-  constructor(){
-     // 1) 訂閱 DataManager
-    DataManager.onChange((p)=> this.hydrateFromPlayer(p));
+  constructor() {
+    // 1) 訂閱 DataManager
+    DataManager.onChange((p) => this.hydrateFromPlayer(p));
     // 2) 若已有登入，抓一次
     DataManager.getPlayerDataCached().then(p => p && this.hydrateFromPlayer(p));
   }
@@ -38,17 +38,17 @@ export class StoreState {
 
     // 消耗品庫存（合併 feeds + items）
     this.inventory.clear();
-    const inv = p.inventory || { feeds:{normal:0, premium:0}, items:{} as any };
+    const inv = p.inventory || { feeds: { normal: 0, premium: 0 }, items: {} as any };
     this.inventory.set('feed_normal', inv.feeds?.normal ?? 0);
     this.inventory.set('feed_high', inv.feeds?.premium ?? 0);
-    this.inventory.set('med_trans',  inv.items?.genderPotion ?? 0);
+    this.inventory.set('med_trans', inv.items?.genderPotion ?? 0);
     this.inventory.set('med_change', inv.items?.changePotion ?? 0);
-    this.inventory.set('med_cold',   inv.items?.coldMedicine ?? 0);
-    this.inventory.set('med_lvup',   inv.items?.upgradePotion ?? 0);
+    this.inventory.set('med_cold', inv.items?.coldMedicine ?? 0);
+    this.inventory.set('med_lvup', inv.items?.upgradePotion ?? 0);
     this.inventory.set('med_revive', inv.items?.revivePotion ?? 0);
-    this.inventory.set('env_brush',  inv.items?.brush ?? 0);
-    this.inventory.set('env_fan',    inv.items?.fan ?? 0);
-    this.inventory.set('heater',     inv.items?.heater ?? 0);
+    this.inventory.set('env_brush', inv.items?.brush ?? 0);
+    this.inventory.set('env_fan', inv.items?.fan ?? 0);
+    this.inventory.set('heater', inv.items?.heater ?? 0);
     this.events.emit('inventory:change');
   }
 
@@ -77,30 +77,39 @@ export class StoreState {
   }
 
   // 效率版：一次買多個（只針對 CONSUMABLE）
-  async purchaseMany(item: CatalogItem, qty: number) {
+  async purchaseMany(item: CatalogItem, qty: number): Promise<{ ok: boolean; reason?: string }> {
     qty = Math.max(1, Math.floor(qty));
     if (item.type !== 'CONSUMABLE') return this.purchase(item);
-    const p = item.priceSoft; if (!p) return { ok:false, reason:'NO_PRICE' };
+
+    const p = item.priceSoft;
+    if (!p) return { ok: false, reason: 'NO_PRICE' };
+
     const res = await DataManager.purchase(item.sku, qty, p.amount);
-    if (!res.ok) return { ok:false, reason: res.error || 'FAILED' };
+
+    if ('error' in res) {
+      return { ok: false, reason: res.error || 'FAILED' };
+    }
     // hydrate 會自動跑（因為 DataManager.emit）
-    return { ok:true };
+    return { ok: true };
   }
 
-  async purchase(item: CatalogItem): { ok: boolean; reason?: string } {
+  async purchase(item: CatalogItem): Promise<{ ok: boolean; reason?: string }> {
     const p = item.priceSoft;
-    if (!p) return { ok:false, reason:'NO_PRICE' };
+    if (!p) return { ok: false, reason: 'NO_PRICE' };
 
     if (item.type === 'NON_CONSUMABLE' && this.isOwned(item.sku)) {
-      return { ok:false, reason:'ALREADY_OWNED' };
+      return { ok: false, reason: 'ALREADY_OWNED' };
     }
+
     const res = await DataManager.purchase(item.sku, 1, p.amount);
-    if (!res.ok) {
+
+    if ('error' in res) {
       const r = res.error === 'NOT_ENOUGH' ? 'NOT_ENOUGH' : 'FAILED';
-      return { ok:false, reason: r };
+      return { ok: false, reason: r };
     }
-    return { ok:true };
+    return { ok: true };
   }
+
 
   async resetDemo() {
     const p = await DataManager.getPlayerDataCached({ refresh: true });
