@@ -24,6 +24,9 @@ export class MailboxPanel extends Component {
             const unread = allMails.filter(x => x.status === 'unread').length;
             this.node.emit('mailbox-refreshed', { unread });
 
+            // 對整個場景廣播（外層紅點用這個收到）
+            this.node.scene?.emit('mailbox-refreshed', { unread });
+
             // 顯示未讀信件（這裡可以依需求改成全部）
             const visible = allMails.filter(x => x.status === 'unread');
             if (!visible.length) {

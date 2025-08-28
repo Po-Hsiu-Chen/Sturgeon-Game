@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Label, Sprite, SpriteFrame, EditBox, Vec3, tween, UITransform, UIOpacity, Button } from 'cc';
+import { _decorator, Component, Node, Label, Sprite, SpriteFrame, EditBox, Vec3, tween, UITransform, UIOpacity, Button, Color } from 'cc';
 import { SwimmingFish } from './SwimmingFish';
 import { FishLogic } from './FishLogic';
 import { GameManager } from './GameManager';
@@ -21,13 +21,18 @@ export class FishDetailManager extends Component {
     @property(Sprite) fishStatusImage: Sprite = null!;
     @property(Label) floatingText: Label = null!;
 
-    // Fashion 相關
-    @property(Node) fashionSection: Node = null!;
-    @property(Node) fashionTabButton: Node = null!;
+    // TabButton
+    @property([Node]) tabButtons: Node[] = []; // 依序放：Feed / Heal / Fashion
+
+    // Feed 相關
+    @property(Node) feedSection: Node = null!;
+    @property(Node) feedBtnNormal: Node = null!;
+    @property(Node) feedBtnPremium: Node = null!;
+    @property(Label) feedNormalCountLabel: Label = null!;
+    @property(Label) feedPremiumCountLabel: Label = null!;
 
     // Heal 相關
     @property(Node) healSection: Node = null!;
-    @property(Node) healTabButton: Node = null!;
     @property(Node) genderPotionBtn: Node = null!;
     @property(Label) genderPotionCountLabel: Label = null!;
     @property(Node) upgradePotionBtn: Node = null!;
@@ -37,13 +42,8 @@ export class FishDetailManager extends Component {
     @property(Node) changePotionBtn: Node = null!;
     @property(Label) changePotionCountLabel: Label = null!;
 
-    // Feed 相關
-    @property(Node) feedSection: Node = null!;
-    @property(Node) feedTabButton: Node = null!;
-    @property(Node) feedBtnNormal: Node = null!;
-    @property(Node) feedBtnPremium: Node = null!;
-    @property(Label) feedNormalCountLabel: Label = null!;
-    @property(Label) feedPremiumCountLabel: Label = null!;
+    // Fashion 相關
+    @property(Node) fashionSection: Node = null!;
 
     // 關閉按鈕
     @property(Node) closeButton: Node = null!;
@@ -69,11 +69,14 @@ export class FishDetailManager extends Component {
     @property(Node) confirmDialogYesButton: Node = null!;
     @property(Node) confirmDialogNoButton: Node = null!;
 
-    @property(Node) floatingNode: Node = null!; 
+    @property(Node) floatingNode: Node = null!;
 
     private currentFishId: number = -1;
     private confirmCallback: Function | null = null;
     private isReadOnly: boolean = false;
+    private _currentTab: 'feed' | 'heal' | 'fashion' = 'feed';
+    private _tabKeys: Array<'feed' | 'heal' | 'fashion'> = ['feed', 'heal', 'fashion'];
+    private _tabSections!: Record<'feed' | 'heal' | 'fashion', Node>;
 
     /** 初始化 */
     start() {
@@ -87,15 +90,29 @@ export class FishDetailManager extends Component {
             sick: this.sickSprite,
         });
 
+        // 對應三個 Section
+        this._tabSections = {
+            feed: this.feedSection,
+            heal: this.healSection,
+            fashion: this.fashionSection,
+        };
+
+        // 綁定按鈕事件
+        for (let i = 0; i < this.tabButtons.length; i++) {
+            const key = this._tabKeys[i];
+            const btn = this.tabButtons[i];
+
+            btn.off(Node.EventType.TOUCH_END);
+            btn.on(Node.EventType.TOUCH_END, () => {
+                this.switchTab(key);
+            });
+        }
+
         this.closeButton.on(Node.EventType.TOUCH_END, this.closeFishDetail, this);
 
         this.renameButton.on(Node.EventType.TOUCH_END, this.showRenamePanel, this);
         this.renameConfirmButton.on(Node.EventType.TOUCH_END, this.renameFish, this);
         this.renameCancelButton.on(Node.EventType.TOUCH_END, this.hideRenamePanel, this);
-
-        this.fashionTabButton.on(Node.EventType.TOUCH_END, () => this.switchTab('fashion'), this);
-        this.healTabButton.on(Node.EventType.TOUCH_END, () => this.switchTab('heal'), this);
-        this.feedTabButton.on(Node.EventType.TOUCH_END, () => this.switchTab('feed'), this);
 
         this.genderPotionBtn.on(Node.EventType.TOUCH_END, this.onUseGenderPotion, this);
         this.upgradePotionBtn.on(Node.EventType.TOUCH_END, this.onUseUpgradePotion, this);
@@ -179,8 +196,6 @@ export class FishDetailManager extends Component {
         this.upgradePotionBtn.getComponent(Button)!.interactable = !isReadOnly;
         this.coldMedicineBtn.getComponent(Button)!.interactable = !isReadOnly;
         this.renameButton.getComponent(Button)!.interactable = !isReadOnly;
-        this.fashionTabButton.getComponent(Button)!.interactable = !isReadOnly;
-        this.healTabButton.getComponent(Button)!.interactable = !isReadOnly;
 
         // 情緒圖 (優先使用 SwimmingFish 傳來的 sprite)
         if (emotionSprite) {
@@ -250,27 +265,33 @@ export class FishDetailManager extends Component {
     }
 
     /** Tab 切換 */
-    switchTab(tabName: 'fashion' | 'heal' | 'feed') {
-        // 重置所有 tab 的順序
-        this.fashionSection.setSiblingIndex(0);
-        this.healSection.setSiblingIndex(0);
-        this.feedSection.setSiblingIndex(0);
+    switchTab(tabName: 'feed' | 'heal' | 'fashion') {
+        this._currentTab = tabName;
 
-        // 把選中的排最上面
-        switch (tabName) {
-            case 'fashion':
-                this.fashionSection.setSiblingIndex(99);
-                break;
-            case 'heal':
-                this.healSection.setSiblingIndex(99);
-                break;
-            case 'feed':
-                this.feedSection.setSiblingIndex(99);
-                break;
-        }
+        // 控制 Section 顯示
+        this._tabKeys.forEach(key => {
+            this._tabSections[key].active = (key === tabName);
+        });
 
+        // 更新按鈕狀態
+        this.updateTabVisuals();
     }
 
+    /** 更新按鈕顏色（選中白色、未選灰色） */
+    private updateTabVisuals() {
+        const onColor = Color.WHITE;
+        const offColor = new Color(220, 220, 220, 255);
+
+        this.tabButtons.forEach((btn, i) => {
+            const key = this._tabKeys[i];
+            const frameNode = btn.getChildByName('Frame');
+            const sprite = frameNode?.getComponent(Sprite);
+            if (sprite) {
+                sprite.color = key === this._currentTab ? onColor : offColor;
+            }
+        });
+    }
+    
     /** 道具使用：變性藥 */
     onUseGenderPotion() {
         this.getCurrentFishAndPlayer().then(({ playerData, fish }) => {

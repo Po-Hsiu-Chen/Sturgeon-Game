@@ -153,7 +153,7 @@ export class SwimmingFish extends Component {
         }
     }
 
-    /** 依優先序決定情緒：sick > cold/hot > hungry(>=80) > 隨機(happy|sad|angry) */
+    /** 依優先序決定情緒：sick > cold/hot > hungry(>=80)/hungry(<=20) > 隨機(happy|sad|angry) */
     static computeEmotion(fish: FishData, env: any):
         "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "sick" {
         if (fish.status?.sick) return "sick";
@@ -161,6 +161,7 @@ export class SwimmingFish extends Component {
         if (env?.temperature < minComfort) return "cold";
         if (env?.temperature > maxComfort) return "hot";
         if ((fish.hunger ?? 0) >= 80) return "hungry";
+        if ((fish.hunger ?? 0) <= 20) return "happy";
         const pool = ["happy", "sad", "angry"] as const;
         return pool[Math.floor(Math.random() * pool.length)];
     }

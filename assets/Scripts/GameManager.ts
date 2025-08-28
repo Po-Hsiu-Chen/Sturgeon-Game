@@ -33,8 +33,13 @@ export class GameManager extends Component {
     @property(Button) tombTankBtn: Button = null!;              // 墓地魚缸按鈕
     @property(Node) tombTankNode: Node = null!;                 // 墓地魚缸節點
 
-    // 簽到面板
-    @property(Node) signInPanel: Node = null!;
+    // 顯示玩家資料
+    @property(Label) userNameLabel: Label = null!;              // 龍骨數量
+    @property(Label) userIdLabel: Label = null!;                // 使用者ID
+    @property(Sprite) userAvatar: Sprite = null!;               // 使用者頭貼
+    @property(SpriteFrame) defaultAvatar: SpriteFrame = null!;  // 預設頭貼
+    @property(Label) dragonboneLabel: Label = null!;            // 龍骨數量
+    @property(Label) fishCountLabel: Label = null!;             // 魚數量
 
     // 環境資訊
     @property(Label) temperatureLabel: Label = null!;           // 溫度顯示
@@ -55,6 +60,9 @@ export class GameManager extends Component {
     @property(Node) coldOverlay: Node = null!;                   // 冷
     @property(Node) hotOverlay: Node = null!;                    // 熱
 
+    // 簽到面板
+    @property(Node) signInPanel: Node = null!;
+
     // 確認面板
     @property(Node) confirmDialogPanel: Node = null!;            // 確認提示面板
     @property(Label) confirmDialogText: Label = null!;           // 提示文字
@@ -62,26 +70,15 @@ export class GameManager extends Component {
     @property(Node) confirmDialogNoButton: Node = null!;         // 否按鈕
 
     // 提示面板
-    @property(Node) deathNoticePanel: Node = null!;             // 死亡通知面板
-    @property(Label) deathNoticeLabel: Label = null!;           // 死亡通知文字
-    @property(Button) deathNoticeCloseBtn: Button = null!;      // 死亡通知關閉按鈕
+    @property(Node) noticePanel: Node = null!;                  // 通知面板
+    @property(Label) noticeLabel: Label = null!;                // 通知面板文字
+    @property(Button) noticeCloseBtn: Button = null!;           // 通知面板關閉按鈕
     @property(Node) tombHintPanel: Node = null!;                // 墓地提示面板
     @property(Button) tombHintCloseBtn: Button = null!;         // 墓地提示關閉按鈕
 
-    // user data
-    @property(Label) userNameLabel: Label = null!;
-    @property(Label) userIdLabel: Label = null!;
-    @property(Sprite) userAvatar: Sprite = null!;
-    @property(SpriteFrame) defaultAvatar: SpriteFrame = null!;
-
-    @property(Node) floatingNode: Node = null!;
-    @property(Button) backToMyTankBtn: Button = null!;
-
-    //錢
-    @property(Label) dragonboneLabel: Label = null!;
-
-    //魚數量
-    @property(Label) fishCountLabel: Label = null!;
+    @property(Node) floatingNode: Node = null!;                 // 提示文字
+    @property(Button) backToMyTankBtn: Button = null!;          // 返回自己魚缸按鈕
+    @property(Node) mailboxRedDot: Node = null!;                // Mail未讀紅點點
 
     private confirmCallback: Function | null = null;         // 確認回調
     private currentTankId: number = 1;                       // 當前魚缸 ID
@@ -89,40 +86,32 @@ export class GameManager extends Component {
     private playerData: PlayerData | null = null;
     private isViewingFriend = false;
     private viewingFriend: Pick<PlayerData, 'tankList' | 'fishList' | 'tankEnvironment' | 'userId' | 'displayName'> | null = null;
-
+    private lastNoticeType: 'none' | 'death' | 'env' = 'none';
+    
     /** 初始化 */
     async start() {
-        // 檢查是否要強制 dev 模式（例如網址帶 ?dev=1）
         const urlParams = new URLSearchParams(window.location.search);
         const forceDev = urlParams.get('dev') === '1';
-        const devUid = urlParams.get('uid') || 'DEV_LOCAL';;
+        const devUid = urlParams.get('uid') || 'DEV_LOCAL';
 
         try {
             if (forceDev) {
-                console.warn('[Game] 強制 DEV 模式');
-                // 重要：本機測試要走資料庫，不要寫 localStorage
+                // 開發模式：直連本地後端
+                console.warn('[Game] DEV 模式');
                 DataManager.useLocalStorage = false;
-                // 指向本機後端
                 DataManager.apiBase = 'http://localhost:3000';
-
                 await DataManager.init(devUid);
-                this.playerData = await DataManager.getPlayerDataCached();
             } else {
-                // === 正常 LIFF 登入流程 ===
+                // 正常模式：LINE LIFF 登入
                 await initLiff(LIFF_ID);
                 const { idToken } = await getIdentity();
-                if (!idToken) {
-                    throw new Error('取不到 idToken，請用 LINE App / LIFF URL 開啟');
-                }
-
+                if (!idToken) throw new Error('取不到 idToken，請用 LINE App / LIFF URL 開啟');
                 const { lineUserId } = await authWithLine(idToken);
-
                 await DataManager.init(lineUserId);
-                this.playerData = await DataManager.getPlayerDataCached();
             }
+            this.playerData = await DataManager.getPlayerDataCached();
         } catch (e) {
-            console.error('[Game] 啟動失敗，錯誤：', e);
-            // 注意：這裡就「不要」自動 fallback 到 DEV_LOCAL
+            console.error('[Game] 啟動失敗：', e);
             return;
         }
 
@@ -131,35 +120,34 @@ export class GameManager extends Component {
             return;
         }
 
-        // === 正常遊戲初始化 ===
-        await this.processDailyUpdate();
+        // 監聽信箱紅點事件並初始化
+        this.node.scene?.on('mailbox-refreshed', this.onMailboxRefreshed, this);
+        this.refreshMailboxBadge();
 
+        // 初始化流程
+        await this.processDailyUpdate();
         this.initButtons();
         this.initDialogs();
         this.initPanels();
-
         await this.switchTank(1);
         await this.tombManager?.init();
         await this.refreshEnvironmentUI();
+        this.maybeShowEnvNoticeOnEnter();
 
+        // 玩家資料變動時即時刷新 UI
         this.offDMChange = DataManager.onChange((p) => {
-            // 任何時候玩家資料被更新（包含購買扣龍骨），都會進到這裡
             this.playerData = p;
-            // 立即刷新畫面上的顯示（龍骨數、道具數、環境按鈕等）
             void this.refreshEnvironmentUI();
         });
 
-        // 顯示基本資料
+        // 顯示玩家資訊
         this.userNameLabel.string = this.playerData.displayName || "未命名";
         this.userIdLabel.string = this.playerData.userId || "";
-
-        // 載入頭貼
         if (this.playerData.picture) {
             this.loadAvatar(this.playerData.picture);
         } else {
             this.userAvatar.spriteFrame = this.defaultAvatar;
         }
-
     }
 
     /** 載入頭貼 */
@@ -225,17 +213,18 @@ export class GameManager extends Component {
     /** 初始化面板事件與狀態 */
     initPanels() {
         // 簽到面板
-        if (this.signInPanel) {
-            this.signInPanel.active = true;
-        }
+        if (this.signInPanel) this.signInPanel.active = true;
 
-        // 死亡提示面板
-        this.deathNoticeCloseBtn.node.on(Node.EventType.TOUCH_END, () => {
-            this.deathNoticePanel.active = false;
-            this.tombHintPanel.active = true;
+        // NoticePanel 關閉邏輯：依通知類型處理
+        this.noticeCloseBtn.node.on(Node.EventType.TOUCH_END, () => {
+            this.noticePanel.active = false;
+
+            if (this.lastNoticeType === 'death') {
+                this.tombHintPanel.active = true;   // 死亡才提示墓地
+            }
+            this.lastNoticeType = 'none';
         });
 
-        // 墓園提示面板
         this.tombHintCloseBtn.node.on(Node.EventType.TOUCH_END, () => {
             this.tombHintPanel.active = false;
         });
@@ -573,7 +562,7 @@ export class GameManager extends Component {
         if (deadFishNames.length > 0) {
             const nameList = deadFishNames.join('、');
             const message = `${nameList}\n因為太餓，沒能撐下去...\n但牠的記憶還在某個地方等你`;
-            this.showDeathNotice(message);
+            this.showNotice(message, 'death');
         }
 
         // 更新記錄的時間
@@ -671,10 +660,12 @@ export class GameManager extends Component {
         return newFishNode;
     }
 
-    showDeathNotice(message: string) {
-        this.deathNoticeLabel.string = message;
-        this.deathNoticePanel.active = true;
+    showNotice(message: string, type: 'death' | 'env' = 'env') {
+        this.lastNoticeType = type;
+        this.noticeLabel.string = message;
+        this.noticePanel.active = true;
     }
+
 
     /** 資料刷新 */
     async refreshEnvironmentUI() {
@@ -724,11 +715,67 @@ export class GameManager extends Component {
         this.updateEnvironmentOverlays(env);
     }
 
+    /** 首次進入時，如環境異常則用 NoticePanel 提醒（死亡優先，不覆蓋） */
+    private maybeShowEnvNoticeOnEnter() {
+        if (!this.playerData) return;
+
+        // 不在自己缸、不在主視圖時不提示
+        if (this.isViewingFriend) return;
+        if (this.tombTankNode?.active) return;
+
+        // 如果已經有死亡通知在畫面上，就不要蓋掉（優先權：death > env）
+        if (this.noticePanel?.active && this.lastNoticeType === 'death') return;
+
+        const env = this.playerData.tankEnvironment;
+        const tooCold = env.temperature < this.minComfortTemp;
+        const tooHot = env.temperature > this.maxComfortTemp;
+        const isDirty = env.waterQualityStatus !== 'clean';
+
+        // 依優先序：髒 > 冷 > 熱
+        if (isDirty) {
+            this.showNotice('魚缸髒髒的～快用魚缸刷清潔魚缸', 'env');
+            return;
+        }
+        if (tooCold) {
+            this.showNotice('魚缸好冷呀～快用加熱器升溫', 'env');
+            return;
+        }
+        if (tooHot) {
+            this.showNotice('魚缸快煮沸啦～快用風扇降溫救救小魚', 'env');
+            return;
+        }
+    }
+
     async onDestroy() {
         this.offDMChange?.();
         this.offDMChange = null;
+        this.node.scene?.off('mailbox-refreshed', this.onMailboxRefreshed, this);
+
     }
 
+    /** 收到 MailboxPanel 廣播時的處理 */
+    private onMailboxRefreshed = ({ unread }: { unread: number }) => {
+        this.applyMailboxBadge(unread);
+    };
+
+    /** 進入遊戲時主動抓一次未讀數 */
+    private async refreshMailboxBadge() {
+        try {
+            const all = await DataManager.getInbox();
+            const unread = all.filter(x => x.status === 'unread').length;
+            this.applyMailboxBadge(unread);
+        } catch (e) {
+            // 拿不到就先關掉紅點
+            this.applyMailboxBadge(0);
+        }
+    }
+
+    /** 控制紅點 */
+    private applyMailboxBadge(unread: number) {
+        if (this.mailboxRedDot) {
+            this.mailboxRedDot.active = unread > 0;
+        }
+    }
 
     /** 使用加熱器（點擊） */
     async onClickHeater() {

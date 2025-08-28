@@ -278,9 +278,6 @@
         "__id__": 35
       },
       {
-        "__id__": 47
-      },
-      {
         "__id__": 64
       }
     ],
@@ -295,8 +292,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
-      "y": 15.577999999999992,
+      "x": 3.5405000000000015,
+      "y": 34.6125,
       "z": 0
     },
     "_lrot": {
@@ -446,8 +443,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 550,
-      "height": 748.8439999999999
+      "width": 615.4050000000001,
+      "height": 786.9129999999999
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -477,13 +474,13 @@
     "_dstBlendFactor": 4,
     "_color": {
       "__type__": "cc.Color",
-      "r": 151,
-      "g": 151,
-      "b": 151,
+      "r": 231,
+      "g": 246,
+      "b": 255,
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "651a37d9-4bb8-4509-b573-e849d7e075aa@f9941",
+      "__uuid__": "bd9c8ae6-9d61-40f8-822e-e9926f4f9bb6@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 0,
@@ -621,8 +618,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 534,
-      "height": 658.1179999999999
+      "width": 599.4050000000001,
+      "height": 696.1869999999999
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -743,8 +740,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 550,
-      "height": 748.8439999999999
+      "width": 615.4050000000001,
+      "height": 786.9129999999999
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -808,7 +805,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "Title",
+    "_name": "TopBar",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {
@@ -817,24 +814,27 @@
     "_children": [
       {
         "__id__": 36
+      },
+      {
+        "__id__": 42
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 42
+        "__id__": 59
       },
       {
-        "__id__": 44
+        "__id__": 61
       }
     ],
     "_prefab": {
-      "__id__": 46
+      "__id__": 63
     },
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 330.7695,
+      "y": 349.804,
       "z": 0
     },
     "_lrot": {
@@ -1020,117 +1020,40 @@
     "nestedPrefabInstanceRoots": null
   },
   {
-    "__type__": "cc.UITransform",
-    "_name": "",
-    "_objFlags": 0,
-    "__editorExtras__": {},
-    "node": {
-      "__id__": 35
-    },
-    "_enabled": true,
-    "__prefab": {
-      "__id__": 43
-    },
-    "_contentSize": {
-      "__type__": "cc.Size",
-      "width": 530,
-      "height": 67.305
-    },
-    "_anchorPoint": {
-      "__type__": "cc.Vec2",
-      "x": 0.5,
-      "y": 0.5
-    },
-    "_id": ""
-  },
-  {
-    "__type__": "cc.CompPrefabInfo",
-    "fileId": "danXRX8tJJ6oVYY/7VOs3q"
-  },
-  {
-    "__type__": "cc.Widget",
-    "_name": "",
-    "_objFlags": 0,
-    "__editorExtras__": {},
-    "node": {
-      "__id__": 35
-    },
-    "_enabled": true,
-    "__prefab": {
-      "__id__": 45
-    },
-    "_alignFlags": 41,
-    "_target": null,
-    "_left": 10,
-    "_right": 10,
-    "_top": 9.999999999999972,
-    "_bottom": 350,
-    "_horizontalCenter": 0,
-    "_verticalCenter": 0,
-    "_isAbsLeft": true,
-    "_isAbsRight": true,
-    "_isAbsTop": true,
-    "_isAbsBottom": true,
-    "_isAbsHorizontalCenter": true,
-    "_isAbsVerticalCenter": true,
-    "_originalWidth": 100,
-    "_originalHeight": 100,
-    "_alignMode": 2,
-    "_lockFlags": 0,
-    "_id": ""
-  },
-  {
-    "__type__": "cc.CompPrefabInfo",
-    "fileId": "b6AoXo73xKAKt27qcSyKgN"
-  },
-  {
-    "__type__": "cc.PrefabInfo",
-    "root": {
-      "__id__": 1
-    },
-    "asset": {
-      "__id__": 0
-    },
-    "fileId": "c2mZOzD9dON6Vgw5yCVhzL",
-    "instance": null,
-    "targetOverrides": null,
-    "nestedPrefabInstanceRoots": null
-  },
-  {
     "__type__": "cc.Node",
     "_name": "CloseButton",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {
-      "__id__": 12
+      "__id__": 35
     },
     "_children": [
       {
-        "__id__": 48
+        "__id__": 43
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 54
+        "__id__": 49
+      },
+      {
+        "__id__": 51
+      },
+      {
+        "__id__": 53
       },
       {
         "__id__": 56
-      },
-      {
-        "__id__": 58
-      },
-      {
-        "__id__": 61
       }
     ],
     "_prefab": {
-      "__id__": 63
+      "__id__": 58
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 240,
-      "y": 339.42199999999997,
+      "x": 262.70250000000004,
+      "y": -1.3474999999999966,
       "z": 0
     },
     "_lrot": {
@@ -1162,20 +1085,20 @@
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {
-      "__id__": 47
+      "__id__": 42
     },
     "_children": [],
     "_active": true,
     "_components": [
       {
-        "__id__": 49
+        "__id__": 44
       },
       {
-        "__id__": 51
+        "__id__": 46
       }
     ],
     "_prefab": {
-      "__id__": 53
+      "__id__": 48
     },
     "_lpos": {
       "__type__": "cc.Vec3",
@@ -1212,11 +1135,11 @@
     "_objFlags": 0,
     "__editorExtras__": {},
     "node": {
-      "__id__": 48
+      "__id__": 43
     },
     "_enabled": true,
     "__prefab": {
-      "__id__": 50
+      "__id__": 45
     },
     "_contentSize": {
       "__type__": "cc.Size",
@@ -1240,11 +1163,11 @@
     "_objFlags": 0,
     "__editorExtras__": {},
     "node": {
-      "__id__": 48
+      "__id__": 43
     },
     "_enabled": true,
     "__prefab": {
-      "__id__": 52
+      "__id__": 47
     },
     "_customMaterial": null,
     "_srcBlendFactor": 2,
@@ -1298,11 +1221,11 @@
     "_objFlags": 0,
     "__editorExtras__": {},
     "node": {
-      "__id__": 47
+      "__id__": 42
     },
     "_enabled": true,
     "__prefab": {
-      "__id__": 55
+      "__id__": 50
     },
     "_contentSize": {
       "__type__": "cc.Size",
@@ -1326,11 +1249,11 @@
     "_objFlags": 0,
     "__editorExtras__": {},
     "node": {
-      "__id__": 47
+      "__id__": 42
     },
     "_enabled": true,
     "__prefab": {
-      "__id__": 57
+      "__id__": 52
     },
     "_customMaterial": null,
     "_srcBlendFactor": 2,
@@ -1371,15 +1294,15 @@
     "_objFlags": 0,
     "__editorExtras__": {},
     "node": {
-      "__id__": 47
+      "__id__": 42
     },
     "_enabled": true,
     "__prefab": {
-      "__id__": 59
+      "__id__": 54
     },
     "clickEvents": [
       {
-        "__id__": 60
+        "__id__": 55
       }
     ],
     "_interactable": true,
@@ -1419,7 +1342,7 @@
     "_duration": 0.1,
     "_zoomScale": 1.2,
     "_target": {
-      "__id__": 47
+      "__id__": 42
     },
     "_id": ""
   },
@@ -1441,11 +1364,11 @@
     "_objFlags": 0,
     "__editorExtras__": {},
     "node": {
-      "__id__": 47
+      "__id__": 42
     },
     "_enabled": true,
     "__prefab": {
-      "__id__": 62
+      "__id__": 57
     },
     "_alignFlags": 33,
     "_target": null,
@@ -1480,6 +1403,83 @@
       "__id__": 0
     },
     "fileId": "9fVMvYs1dIs6hzbYwr1T50",
+    "instance": null,
+    "targetOverrides": null,
+    "nestedPrefabInstanceRoots": null
+  },
+  {
+    "__type__": "cc.UITransform",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 35
+    },
+    "_enabled": true,
+    "__prefab": {
+      "__id__": 60
+    },
+    "_contentSize": {
+      "__type__": "cc.Size",
+      "width": 595.4050000000001,
+      "height": 67.305
+    },
+    "_anchorPoint": {
+      "__type__": "cc.Vec2",
+      "x": 0.5,
+      "y": 0.5
+    },
+    "_id": ""
+  },
+  {
+    "__type__": "cc.CompPrefabInfo",
+    "fileId": "danXRX8tJJ6oVYY/7VOs3q"
+  },
+  {
+    "__type__": "cc.Widget",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 35
+    },
+    "_enabled": true,
+    "__prefab": {
+      "__id__": 62
+    },
+    "_alignFlags": 41,
+    "_target": null,
+    "_left": 10,
+    "_right": 10,
+    "_top": 9.999999999999972,
+    "_bottom": 350,
+    "_horizontalCenter": 0,
+    "_verticalCenter": 0,
+    "_isAbsLeft": true,
+    "_isAbsRight": true,
+    "_isAbsTop": true,
+    "_isAbsBottom": true,
+    "_isAbsHorizontalCenter": true,
+    "_isAbsVerticalCenter": true,
+    "_originalWidth": 100,
+    "_originalHeight": 100,
+    "_alignMode": 2,
+    "_lockFlags": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.CompPrefabInfo",
+    "fileId": "b6AoXo73xKAKt27qcSyKgN"
+  },
+  {
+    "__type__": "cc.PrefabInfo",
+    "root": {
+      "__id__": 1
+    },
+    "asset": {
+      "__id__": 0
+    },
+    "fileId": "c2mZOzD9dON6Vgw5yCVhzL",
     "instance": null,
     "targetOverrides": null,
     "nestedPrefabInstanceRoots": null
@@ -1589,8 +1589,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -36.61200000000002,
-      "y": 186.868,
+      "x": 4.1784999999999854,
+      "y": 173.883,
       "z": 0
     },
     "_lrot": {
@@ -1642,8 +1642,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -160.021234375,
-      "y": 102.35399999999998,
+      "x": -223.51228125000006,
+      "y": 134.37349999999998,
       "z": 0
     },
     "_lrot": {
@@ -1683,7 +1683,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 100.01953125,
+      "width": 120.0234375,
       "height": 50.4
     },
     "_anchorPoint": {
@@ -1722,8 +1722,8 @@
     "_string": "名字：XXX",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 20,
-    "_fontSize": 20,
+    "_actualFontSize": 24,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
     "_overflow": 0,
@@ -1840,8 +1840,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -160.021234375,
-      "y": 51.95399999999998,
+      "x": -223.51228125000006,
+      "y": 81.37349999999998,
       "z": 0
     },
     "_lrot": {
@@ -1881,7 +1881,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 100.01953125,
+      "width": 120.0234375,
       "height": 50.4
     },
     "_anchorPoint": {
@@ -1920,8 +1920,8 @@
     "_string": "性別：XXX",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 20,
-    "_fontSize": 20,
+    "_actualFontSize": 24,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
     "_overflow": 0,
@@ -2038,8 +2038,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -71.134515625,
-      "y": 1.5539999999999807,
+      "x": -116.84821875000006,
+      "y": 28.373499999999975,
       "z": 0
     },
     "_lrot": {
@@ -2079,7 +2079,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 277.79296875,
+      "width": 333.3515625,
       "height": 50.4
     },
     "_anchorPoint": {
@@ -2118,8 +2118,8 @@
     "_string": "成長天數：牠努力生活了 XX 天",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 20,
-    "_fontSize": 20,
+    "_actualFontSize": 24,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
     "_overflow": 0,
@@ -2175,7 +2175,7 @@
     },
     "_alignFlags": 8,
     "_target": null,
-    "_left": 1.4210854715202004e-14,
+    "_left": 0,
     "_right": 0,
     "_top": 0,
     "_bottom": 0,
@@ -2236,8 +2236,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -159.0935,
-      "y": -48.84600000000002,
+      "x": -222.39900000000006,
+      "y": -24.626500000000025,
       "z": 0
     },
     "_lrot": {
@@ -2277,7 +2277,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 101.875,
+      "width": 122.25,
       "height": 50.4
     },
     "_anchorPoint": {
@@ -2316,8 +2316,8 @@
     "_string": "階段：LV X",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 20,
-    "_fontSize": 20,
+    "_actualFontSize": 24,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
     "_overflow": 0,
@@ -2434,8 +2434,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 32.776617187499994,
-      "y": -99.24600000000002,
+      "x": -7.488843750000058,
+      "y": -77.62650000000002,
       "z": 0
     },
     "_lrot": {
@@ -2475,7 +2475,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 485.615234375,
+      "width": 552.0703125,
       "height": 50.4
     },
     "_anchorPoint": {
@@ -2511,11 +2511,11 @@
       "b": 0,
       "a": 255
     },
-    "_string": "離開的日子：在 XXXX / XX / XX，牠悄悄地離開了魚缸",
+    "_string": "離開的日子：XXXX / XX / XX，牠悄悄地離開了魚缸",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 20,
-    "_fontSize": 20,
+    "_actualFontSize": 24,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
     "_overflow": 0,
@@ -2620,8 +2620,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 420.062,
-      "height": 255.10799999999998
+      "width": 567.0480000000001,
+      "height": 319.147
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -2659,7 +2659,7 @@
     "_paddingTop": 0,
     "_paddingBottom": 0,
     "_spacingX": 0,
-    "_spacingY": 0,
+    "_spacingY": 2.6,
     "_verticalDirection": 1,
     "_horizontalDirection": 0,
     "_constraint": 0,
@@ -2687,8 +2687,8 @@
     "_alignFlags": 41,
     "_target": null,
     "_left": 8.356999999999967,
-    "_right": 81.58100000000002,
-    "_top": 1.4210854715202004e-14,
+    "_right": -1.7763568394002505e-14,
+    "_top": -2.842170943040401e-14,
     "_bottom": 300,
     "_horizontalCenter": 0,
     "_verticalCenter": 0,
@@ -2876,8 +2876,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -34.8818359375,
-      "y": 10.04,
+      "x": -64.47251953125004,
+      "y": 15.895,
       "z": 0
     },
     "_lrot": {
@@ -2917,7 +2917,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 242.236328125,
+      "width": 266.4599609375,
       "height": 33.138
     },
     "_anchorPoint": {
@@ -2956,8 +2956,8 @@
     "_string": "延續魚生（消耗 1 復活藥）",
     "_horizontalAlign": 0,
     "_verticalAlign": 1,
-    "_actualFontSize": 20,
-    "_fontSize": 20,
+    "_actualFontSize": 22,
+    "_fontSize": 22,
     "_fontFamily": "Arial",
     "_lineHeight": 26.3,
     "_overflow": 0,
@@ -3013,12 +3013,12 @@
     },
     "_alignFlags": 10,
     "_target": null,
-    "_left": 89,
+    "_left": 80,
     "_right": 0,
     "_top": 0,
     "_bottom": 0,
     "_horizontalCenter": 0,
-    "_verticalCenter": 10.04,
+    "_verticalCenter": 15.895,
     "_isAbsLeft": true,
     "_isAbsRight": true,
     "_isAbsTop": true,
@@ -3074,7 +3074,7 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -20,
+      "x": -36.20250000000004,
       "y": -23.129,
       "z": 0
     },
@@ -3115,7 +3115,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 272,
+      "width": 323,
       "height": 33.138
     },
     "_anchorPoint": {
@@ -3154,8 +3154,8 @@
     "_string": "如果你願意，牠還能再次游回你的身邊",
     "_horizontalAlign": 0,
     "_verticalAlign": 1,
-    "_actualFontSize": 16,
-    "_fontSize": 16,
+    "_actualFontSize": 19,
+    "_fontSize": 19,
     "_fontFamily": "Arial",
     "_lineHeight": 26.3,
     "_overflow": 0,
@@ -3211,7 +3211,7 @@
     },
     "_alignFlags": 10,
     "_target": null,
-    "_left": 89,
+    "_left": 80,
     "_right": 0,
     "_top": 0,
     "_bottom": 0,
@@ -3279,7 +3279,7 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -201.8735,
+      "x": -234.57600000000005,
       "y": 0,
       "z": 0
     },
@@ -3860,7 +3860,7 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 185,
+      "x": 217.70250000000004,
       "y": 0,
       "z": 0
     },
@@ -4252,7 +4252,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 490,
+      "width": 555.4050000000001,
       "height": 115.01600000000016
     },
     "_anchorPoint": {
@@ -4452,8 +4452,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -56,
-      "y": 10.04,
+      "x": -87.702,
+      "y": 12.967,
       "z": 0
     },
     "_lrot": {
@@ -4493,7 +4493,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 200,
+      "width": 220,
       "height": 33.138
     },
     "_anchorPoint": {
@@ -4532,8 +4532,8 @@
     "_string": "重新養育（從頭開始）",
     "_horizontalAlign": 0,
     "_verticalAlign": 1,
-    "_actualFontSize": 20,
-    "_fontSize": 20,
+    "_actualFontSize": 22,
+    "_fontSize": 22,
     "_fontFamily": "Arial",
     "_lineHeight": 26.3,
     "_overflow": 0,
@@ -4589,12 +4589,12 @@
     },
     "_alignFlags": 10,
     "_target": null,
-    "_left": 89,
+    "_left": 80.00050000000005,
     "_right": 0,
     "_top": 0,
     "_bottom": 0,
     "_horizontalCenter": 0,
-    "_verticalCenter": 10.04,
+    "_verticalCenter": 12.967,
     "_isAbsLeft": true,
     "_isAbsRight": true,
     "_isAbsTop": true,
@@ -4650,7 +4650,7 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -60,
+      "x": -83.70250000000004,
       "y": -23.129,
       "z": 0
     },
@@ -4691,7 +4691,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 192,
+      "width": 228,
       "height": 33.138
     },
     "_anchorPoint": {
@@ -4730,8 +4730,8 @@
     "_string": "記憶將歸零，旅程重新展開",
     "_horizontalAlign": 0,
     "_verticalAlign": 1,
-    "_actualFontSize": 16,
-    "_fontSize": 16,
+    "_actualFontSize": 19,
+    "_fontSize": 19,
     "_fontFamily": "Arial",
     "_lineHeight": 26.3,
     "_overflow": 0,
@@ -4787,7 +4787,7 @@
     },
     "_alignFlags": 10,
     "_target": null,
-    "_left": 89,
+    "_left": 80,
     "_right": 0,
     "_top": 0,
     "_bottom": 0,
@@ -4851,7 +4851,7 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -201.8735,
+      "x": -234.57600000000002,
       "y": 0,
       "z": 0
     },
@@ -5094,7 +5094,7 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 185,
+      "x": 217.70250000000004,
       "y": 0,
       "z": 0
     },
@@ -5486,7 +5486,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 490,
+      "width": 555.4050000000001,
       "height": 115.01600000000016
     },
     "_anchorPoint": {
@@ -5608,7 +5608,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 510,
+      "width": 575.4050000000001,
       "height": 260.0320000000003
     },
     "_anchorPoint": {
@@ -5638,8 +5638,8 @@
     "_target": null,
     "_left": 0,
     "_right": 0,
-    "_top": 311.96,
-    "_bottom": 56.85199999999962,
+    "_top": 330.99449999999996,
+    "_bottom": 75.8864999999996,
     "_horizontalCenter": 0,
     "_verticalCenter": 0,
     "_isAbsLeft": true,
@@ -5675,13 +5675,13 @@
     "_dstBlendFactor": 4,
     "_color": {
       "__type__": "cc.Color",
-      "r": 241,
-      "g": 241,
-      "b": 241,
+      "r": 255,
+      "g": 255,
+      "b": 255,
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "272b610a-c704-4988-99d3-affb4682bf8c@f9941",
+      "__uuid__": "18ca0c64-f16c-4e14-a7a4-91aac9667461@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 1,
@@ -5949,8 +5949,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 510,
-      "height": 628.8439999999999
+      "width": 575.4050000000001,
+      "height": 666.9129999999999
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -6064,8 +6064,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 550,
-      "height": 748.8439999999999
+      "width": 615.4050000000001,
+      "height": 786.9129999999999
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",

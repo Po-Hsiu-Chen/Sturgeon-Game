@@ -41,7 +41,6 @@ export class StoreUI extends Component {
     if (this.modal && this.modal.node) this.modal.node.active = false;
 
     this.renderWallet();
-    //this.renderCategories();
     this.setupCategoryButtons();
     this.renderItems();
 
@@ -66,9 +65,9 @@ export class StoreUI extends Component {
     return `${n.toLocaleString('zh-TW')} `;
   }
 
-  // === 分類按鈕（取代原本 CategoryTab 預置體）===
+  // 分類按鈕
   private setupCategoryButtons() {
-    // 1) 設定每顆按鈕的文字與點擊行為
+    // 設定每顆按鈕的文字與點擊行為
     for (let i = 0; i < this.categoryButtons.length; i++) {
       const btnNode = this.categoryButtons[i];
       const name = CATEGORIES[i] ?? `分類${i + 1}`;
@@ -86,7 +85,7 @@ export class StoreUI extends Component {
       }, this);
     }
 
-    // 2) 依目前分類刷新顏色
+    // 依目前分類刷新顏色
     this.updateCategoryVisuals();
   }
 
@@ -107,10 +106,10 @@ export class StoreUI extends Component {
       if (!sprite) continue;
 
       if (name === activeCat) {
-        // 選中 -> 白色
+        // 選中白色
         sprite.color = Color.WHITE;
       } else {
-        // 未選中 -> 灰色
+        // 未選中灰色
         sprite.color = new Color(220, 220, 220, 255);
       }
     }
@@ -172,7 +171,6 @@ export class StoreUI extends Component {
       }
     });
   }
-
 
   // 測試重置
   onDevReset() { this.state.resetDemo(); this.renderItems(); }

@@ -17,12 +17,6 @@ export class FishLogic {
         return true;
     }
 
-    static getEmotionKey(fish: any): 'happy' | 'sad' | null {
-        if (fish.emotion === 'happy') return 'happy';
-        if (fish.emotion === 'sad') return 'sad';
-        return null;
-    }
-
     static useUpgradePotion(fish: any, items: any): { message: string; upgraded: boolean } {
         if (items.upgradePotion <= 0) {
             return { message: "沒有升級藥了", upgraded: false };
