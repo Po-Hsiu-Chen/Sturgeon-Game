@@ -7,6 +7,8 @@ import { TankEnvironmentManager } from './TankEnvironmentManager';
 import { showFloatingTextCenter } from './utils/UIUtils';
 import { initLiff, getIdentity } from './bridge/LiffBridge';
 import { authWithLine } from './api/Api';
+import { ConfirmDialogManager } from './ConfirmDialogManager';
+
 const { ccclass, property } = _decorator;
 const LIFF_ID = '2007937783-PJ4ZRBdY';
 const RED = new Color(255, 0, 0, 255);    // 紅色
@@ -20,9 +22,10 @@ const TankAssets = {
 
 @ccclass('GameManager')
 export class GameManager extends Component {
-
+    @property(Node) floatingNode: Node = null!;                 // 提示浮動訊息
+    @property(ConfirmDialogManager) confirmDialogManager: ConfirmDialogManager = null!;
     @property(TombManager) tombManager: TombManager = null!;
-
+    
     // 魚缸與魚類
     @property(Node) activeTankViewport: Node = null!;
     @property(Node) fishArea: Node = null!;                     // 魚活動區域
@@ -63,12 +66,6 @@ export class GameManager extends Component {
     // 簽到面板
     @property(Node) signInPanel: Node = null!;
 
-    // 確認面板
-    @property(Node) confirmDialogPanel: Node = null!;            // 確認提示面板
-    @property(Label) confirmDialogText: Label = null!;           // 提示文字
-    @property(Node) confirmDialogYesButton: Node = null!;        // 是按鈕
-    @property(Node) confirmDialogNoButton: Node = null!;         // 否按鈕
-
     // 提示面板
     @property(Node) noticePanel: Node = null!;                  // 通知面板
     @property(Label) noticeLabel: Label = null!;                // 通知面板文字
@@ -76,18 +73,16 @@ export class GameManager extends Component {
     @property(Node) tombHintPanel: Node = null!;                // 墓地提示面板
     @property(Button) tombHintCloseBtn: Button = null!;         // 墓地提示關閉按鈕
 
-    @property(Node) floatingNode: Node = null!;                 // 提示文字
     @property(Button) backToMyTankBtn: Button = null!;          // 返回自己魚缸按鈕
     @property(Node) mailboxRedDot: Node = null!;                // Mail未讀紅點點
 
-    private confirmCallback: Function | null = null;         // 確認回調
     private currentTankId: number = 1;                       // 當前魚缸 ID
     private offDMChange: (() => void) | null = null;
     private playerData: PlayerData | null = null;
     private isViewingFriend = false;
     private viewingFriend: Pick<PlayerData, 'tankList' | 'fishList' | 'tankEnvironment' | 'userId' | 'displayName'> | null = null;
     private lastNoticeType: 'none' | 'death' | 'env' = 'none';
-    
+
     /** 初始化 */
     async start() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -127,7 +122,6 @@ export class GameManager extends Component {
         // 初始化流程
         await this.processDailyUpdate();
         this.initButtons();
-        this.initDialogs();
         this.initPanels();
         await this.switchTank(1);
         await this.tombManager?.init();
@@ -188,26 +182,6 @@ export class GameManager extends Component {
 
         // 返回按鈕
         this.backToMyTankBtn?.node.on(Node.EventType.TOUCH_END, () => this.backToMyTank());
-    }
-
-    /** 初始化對話框事件 */
-    initDialogs() {
-        // 確認視窗
-        this.confirmDialogYesButton?.on(Node.EventType.TOUCH_END, () => {
-            if (this.confirmCallback) {
-                const cb = this.confirmCallback;
-                this.confirmCallback = null;
-                this.confirmDialogPanel.active = false;
-                cb(); // 執行實際行為
-            } else {
-                this.confirmDialogPanel.active = false;
-            }
-        });
-
-        this.confirmDialogNoButton?.on(Node.EventType.TOUCH_END, () => {
-            this.confirmCallback = null;
-            this.confirmDialogPanel.active = false;
-        });
     }
 
     /** 初始化面板事件與狀態 */
@@ -794,7 +768,9 @@ export class GameManager extends Component {
             showFloatingTextCenter(this.floatingNode, '目前為高溫狀態，請使用風扇');
             return;
         }
-        this.showConfirmDialog('確定要使用加熱器嗎？', () => this.useHeater());
+        const ok = await this.confirmDialogManager.ask('確定要使用加熱器嗎？');
+        if (!ok) return;
+        await this.useHeater();
     }
 
     /** 真正執行加熱器 */
@@ -837,7 +813,9 @@ export class GameManager extends Component {
             showFloatingTextCenter(this.floatingNode, '目前為低溫狀態，請使用加熱器');
             return;
         }
-        this.showConfirmDialog('確定要使用風扇嗎？', () => this.useFan());
+        const ok = await this.confirmDialogManager.ask('確定要使用風扇嗎？');
+        if (!ok) return;
+        await this.useFan();
     }
 
     /** 真正執行風扇 */
@@ -876,8 +854,9 @@ export class GameManager extends Component {
             showFloatingTextCenter(this.floatingNode, '目前魚缸很乾淨，無需使用魚缸刷');
             return;
         }
-
-        this.showConfirmDialog('確定要使用魚缸刷嗎？', () => this.useBrush());
+        const ok = await this.confirmDialogManager.ask('確定要使用魚缸刷嗎？');
+        if (!ok) return;
+        await this.useBrush();
     }
 
     /** 真正執行魚缸刷 */
@@ -912,13 +891,6 @@ export class GameManager extends Component {
         if (this.dirtyWaterOverlay) this.dirtyWaterOverlay.active = isDirty;
         if (this.coldOverlay) this.coldOverlay.active = !isDirty && tooCold; // 髒水優先
         if (this.hotOverlay) this.hotOverlay.active = !isDirty && tooHot;  // 髒水優先
-    }
-
-    private showConfirmDialog(message: string, onConfirm: Function) {
-        if (!this.confirmDialogPanel || !this.confirmDialogText) return;
-        this.confirmDialogText.string = message;
-        this.confirmCallback = onConfirm;
-        this.confirmDialogPanel.active = true;
     }
 
     private async setHeaderUser(displayName: string, userId: string, picture?: string) {

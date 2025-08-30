@@ -1,6 +1,5 @@
 import { _decorator, Component, Node } from 'cc';
 import { quizQuestions } from './quiz/QuizData';
-import { getWeekStartKey } from './utils/utils';
 const { ccclass, property } = _decorator;
 
 // -------- 資料結構定義 --------
@@ -164,11 +163,12 @@ export interface MailItem {
 
 export class DataManager {
     static useLocalStorage = false;
-    static apiBase = '';                        // API 伺服器 URL
-    static currentUserId: string | null = null; // 當前登入的玩家 ID
-    static ready: Promise<void> | null = null;  // 初始化完成後的 Promise
+    static apiBase = '';                             // API 伺服器 URL
+    static currentUserId: string | null = null;      // 當前登入的玩家 ID
+    static ready: Promise<void> | null = null;       // 初始化完成後的 Promise
     static readyResolve: (() => void) | null = null;
-    static initializing = false;                // 是否正在初始化
+    static initializing = false;                     // 是否正在初始化
+    static FRIEND_LIMIT = 30;                        // 好友上限
 
     // 快取相關
     static _snapshot: PlayerData | null = null;                  // 快取玩家資料
@@ -424,6 +424,23 @@ export class DataManager {
         return await res.json();
     }
 
+    /** 解除好友（雙向） */
+    static async deleteFriend(friendUserId: string): Promise<{ ok: boolean }> {
+        const id = this.currentUserId;
+        if (!id) throw new Error('no current user');
+        const res = await fetch(`${this.apiBase}/friends/remove`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: id, friendUserId })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            const error = new Error(err?.error || 'deleteFriend failed');
+            (error as any).code = err?.error;
+            throw error;
+        }
+        return await res.json(); // { ok: true }
+    }
 
     /** 取得推薦玩家（隨機） */
     static async getRecommendedUsers(count = 5): Promise<Array<{ userId: string, displayName?: string, picture?: string }>> {
@@ -440,6 +457,7 @@ export class DataManager {
             return [];
         }
     }
+
 
     /** 後端購買（優先） */
     static async purchaseViaApi(sku: string, qty = 1): Promise<PlayerData> {

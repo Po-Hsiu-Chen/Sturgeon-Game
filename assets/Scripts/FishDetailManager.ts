@@ -4,11 +4,15 @@ import { FishLogic } from './FishLogic';
 import { GameManager } from './GameManager';
 import { DataManager, FishData } from './DataManager';
 import { playOpenPanelAnim, showFloatingTextCenter } from './utils/UIUtils';
+import { ConfirmDialogManager } from './ConfirmDialogManager';
 
 const { ccclass, property } = _decorator;
 
 @ccclass('FishDetailManager')
 export class FishDetailManager extends Component {
+    @property(ConfirmDialogManager) confirmDialogManager: ConfirmDialogManager = null!;
+    @property(Node) floatingNode: Node = null!;
+    
     @property(Node) fishDetailPanel: Node = null!;
 
     // Title and InfoSection
@@ -63,16 +67,7 @@ export class FishDetailManager extends Component {
     @property(Node) renameConfirmButton: Node = null!;
     @property(Node) renameCancelButton: Node = null!;
 
-    // 確認提示視窗
-    @property(Node) confirmDialogPanel: Node = null!;
-    @property(Label) confirmDialogText: Label = null!;
-    @property(Node) confirmDialogYesButton: Node = null!;
-    @property(Node) confirmDialogNoButton: Node = null!;
-
-    @property(Node) floatingNode: Node = null!;
-
     private currentFishId: number = -1;
-    private confirmCallback: Function | null = null;
     private isReadOnly: boolean = false;
     private _currentTab: 'feed' | 'heal' | 'fashion' = 'feed';
     private _tabKeys: Array<'feed' | 'heal' | 'fashion'> = ['feed', 'heal', 'fashion'];
@@ -117,20 +112,6 @@ export class FishDetailManager extends Component {
         this.genderPotionBtn.on(Node.EventType.TOUCH_END, this.onUseGenderPotion, this);
         this.upgradePotionBtn.on(Node.EventType.TOUCH_END, this.onUseUpgradePotion, this);
         this.coldMedicineBtn.on(Node.EventType.TOUCH_END, this.onUseColdMedicine, this);
-
-        this.confirmDialogYesButton.on(Node.EventType.TOUCH_END, () => {
-            if (this.confirmCallback) {
-                this.confirmCallback();
-                this.confirmCallback = null;
-            }
-            this.confirmDialogPanel.active = false;
-        }, this);
-
-        this.confirmDialogNoButton.on(Node.EventType.TOUCH_END, () => {
-            this.confirmCallback = null;
-            this.confirmDialogPanel.active = false;
-        }, this);
-
     }
 
     /** 顯示魚詳細資訊（opts.readOnly: 朋友魚唯讀） */
@@ -291,16 +272,18 @@ export class FishDetailManager extends Component {
             }
         });
     }
-    
+
     /** 道具使用：變性藥 */
     onUseGenderPotion() {
-        this.getCurrentFishAndPlayer().then(({ playerData, fish }) => {
+        this.getCurrentFishAndPlayer().then(async ({ playerData, fish }) => {
             if (!playerData || !fish) return;
             if (playerData.inventory.items.genderPotion <= 0) {
                 showFloatingTextCenter(this.floatingNode, '沒有變性藥了');
                 return;
             }
-            this.showConfirmDialog('確定要使用變性藥嗎？', () => this.useGenderPotion());
+            const ok = await this.confirmDialogManager.ask('確定要使用變性藥嗎？');
+            if (!ok) return;
+            await this.useGenderPotion();
         });
     }
     private async useGenderPotion() {
@@ -323,13 +306,15 @@ export class FishDetailManager extends Component {
 
     /** 道具使用：升級藥 */
     onUseUpgradePotion() {
-        this.getCurrentFishAndPlayer().then(({ playerData, fish }) => {
+        this.getCurrentFishAndPlayer().then(async ({ playerData, fish }) => {
             if (!playerData || !fish) return;
             if (playerData.inventory.items.upgradePotion <= 0) {
                 showFloatingTextCenter(this.floatingNode, '沒有升級藥了');
                 return;
             }
-            this.showConfirmDialog('確定要使用升級藥嗎？', () => this.useUpgradePotion());
+            const ok = await this.confirmDialogManager.ask('確定要使用升級藥嗎？');
+            if (!ok) return;
+            await this.useUpgradePotion();
         });
     }
     private async useUpgradePotion() {
@@ -354,7 +339,7 @@ export class FishDetailManager extends Component {
 
     /** 道具使用：感冒藥 */
     onUseColdMedicine() {
-        this.getCurrentFishAndPlayer().then(({ playerData, fish }) => {
+        this.getCurrentFishAndPlayer().then(async ({ playerData, fish }) => {
             if (!playerData || !fish) return;
             if (playerData.inventory.items.coldMedicine <= 0) {
                 showFloatingTextCenter(this.floatingNode, '沒有感冒藥了');
@@ -366,8 +351,9 @@ export class FishDetailManager extends Component {
                 showFloatingTextCenter(this.floatingNode, '這隻魚沒有生病');
                 return;
             }
-
-            this.showConfirmDialog('確定要使用感冒藥嗎？', () => this.useColdMedicine());
+            const ok = await this.confirmDialogManager.ask('確定要使用感冒藥嗎？');
+            if (!ok) return;
+            await this.useColdMedicine();
         });
     }
     private async useColdMedicine() {
@@ -473,11 +459,4 @@ export class FishDetailManager extends Component {
     hideRenamePanel() {
         this.RenamePanel.active = false;
     }
-
-    showConfirmDialog(message: string, onConfirm: Function) {
-        this.confirmDialogText.string = message;
-        this.confirmDialogPanel.active = true;
-        this.confirmCallback = onConfirm;
-    }
-
 }

@@ -58,7 +58,6 @@ export class MailboxPanel extends Component {
         // 標題 / 內容
         const titleLabel = row.getChildByName('TitleLabel')?.getComponent(Label);
         const detailLabel = row.getChildByName('DetailLabel')?.getComponent(Label);
-
         if (titleLabel) titleLabel.string = m.title || '好友邀請';
         if (detailLabel) {
             const name = m.fromUser?.displayName || '(未設定暱稱)';
@@ -123,15 +122,13 @@ export class MailboxPanel extends Component {
             friendPanelCmp?.refreshList?.();
 
         } catch (e: any) {
-            console.warn('respondFriendRequest failed:', e);
-            const code = e?.code || '';
-            // 根據錯誤碼顯示提示
-            if (code === 'request_not_found') {
-                showFloatingTextCenter(this.floatingNode, '邀請不存在或已處理');
-            } else if (code === 'not_request_participant') {
-                showFloatingTextCenter(this.floatingNode, '你沒有權限處理這個邀請');
+            const code = e?.code;
+            if (code === 'friend_limit_reached_other') {
+                showFloatingTextCenter(this.floatingNode, '你太慢了，對方好友已滿');
+            } else if (code === 'friend_limit_reached_self') {
+                showFloatingTextCenter(this.floatingNode, '你的好友已滿');
             } else {
-                showFloatingTextCenter(this.floatingNode, '操作失敗');
+                showFloatingTextCenter(this.floatingNode, '操作失敗，請稍後再試');
             }
         }
     }

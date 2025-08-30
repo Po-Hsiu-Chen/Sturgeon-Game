@@ -5,7 +5,7 @@ const cors = require('cors');
 const { MongoClient } = require('mongodb');
 const path = require('path');
 const { v4: uuid } = require('uuid');
-
+const FRIEND_LIMIT = 30; // 好友上限
 const app = express();
 app.use(cors());             // 開啟跨來源資源共用（CORS）
 app.use(express.json());     // 處理 JSON 請求
@@ -372,6 +372,14 @@ app.post('/friend-requests', async (req, res) => {
     return res.status(409).json({ error: 'already_friends' });
   }
 
+  // 好友上限檢查（送出方 / 對方 兩邊）
+  if ((fromUser.friends || []).length >= FRIEND_LIMIT) {
+    return res.status(409).json({ error: 'friend_limit_reached_sender' });
+  }
+  if ((toUser.friends || []).length >= FRIEND_LIMIT) {
+    return res.status(409).json({ error: 'friend_limit_reached_recipient' });
+  }
+
   // 是否已有待處理邀請（任一方向）
   const existing = await friendRequests.findOne({
     $or: [
@@ -382,6 +390,16 @@ app.post('/friend-requests', async (req, res) => {
 
   // 若對方先邀請你 → 自動成為好友
   if (existing && existing.fromUserId === toUserId && existing.toUserId === fromUserId) {
+    // 成立前再次檢查雙方上限
+    if ((fromUser.friends || []).length >= FRIEND_LIMIT || (toUser.friends || []).length >= FRIEND_LIMIT) {
+      return res.status(409).json({ error: 'friend_limit_reached' });
+    }
+
+    await friendRequests.updateOne(
+      { requestId: existing.requestId },
+      { $set: { status: 'accepted', respondedAt: new Date() } }
+    );
+
     await friendRequests.updateOne(
       { requestId: existing.requestId },
       { $set: { status: 'accepted', respondedAt: new Date() } }
@@ -483,6 +501,23 @@ app.post('/friend-requests/respond', async (req, res) => {
   }
 
   if (action === 'accept') {
+    // 重新抓雙方（保險）
+    const [fromUser, toUser] = await Promise.all([
+      users.findOne({ userId: fr.fromUserId }),
+      users.findOne({ userId: fr.toUserId })
+    ]);
+
+    const fromCnt = (fromUser?.friends?.length || 0);
+    const toCnt = (toUser?.friends?.length || 0);
+
+    // 誰滿就回誰的錯誤碼 
+    if (fromCnt >= FRIEND_LIMIT) {
+      return res.status(409).json({ error: 'friend_limit_reached_other' });  // 對方（邀請發出者）已滿
+    }
+    if (toCnt >= FRIEND_LIMIT) {
+      return res.status(409).json({ error: 'friend_limit_reached_self' });   // 自己（按接受的人）已滿
+    }
+
     await friendRequests.updateOne({ requestId }, { $set: { status: 'accepted', respondedAt: new Date() } });
     await users.updateOne({ userId: fr.fromUserId }, { $addToSet: { friends: fr.toUserId } });
     await users.updateOne({ userId: fr.toUserId }, { $addToSet: { friends: fr.fromUserId } });
@@ -506,7 +541,31 @@ app.post('/friend-requests/respond', async (req, res) => {
   res.status(400).json({ error: 'invalid_action' });
 });
 
-/** 推薦隨機玩家 */
+/** 解除好友（雙向） */
+app.post('/friends/remove', async (req, res) => {
+  const { userId, friendUserId } = req.body || {};
+  if (!userId || !friendUserId) return res.status(400).json({ error: 'invalid_params' });
+
+  const [u1, u2] = await Promise.all([
+    users.findOne({ userId }),
+    users.findOne({ userId: friendUserId })
+  ]);
+  if (!u1 || !u2) return res.status(404).json({ error: 'user_not_found' });
+
+  await users.updateOne({ userId }, { $pull: { friends: friendUserId } });
+  await users.updateOne({ userId: friendUserId }, { $pull: { friends: userId } });
+
+  // 寄通知信
+  await sendMail(friendUserId, {
+    type: 'NOTICE',
+    title: '好友關係已解除',
+    body: `${u1.displayName || userId} 已解除與你的好友關係`,
+    fromUser: { userId, displayName: u1.displayName, picture: u1.picture }
+  });
+
+  res.json({ ok: true });
+});
+
 /** 推薦隨機玩家 */
 app.get('/recommend-users', async (req, res) => {
   try {

@@ -2,6 +2,7 @@ import { _decorator, Component, Node, EditBox, Label, Prefab, instantiate, Butto
 import { DataManager } from './DataManager';
 import { GameManager } from './GameManager';
 import { showFloatingTextCenter } from './utils/UIUtils';
+import { ConfirmDialogManager } from './ConfirmDialogManager';
 
 const { ccclass, property } = _decorator;
 
@@ -11,6 +12,7 @@ enum TabKind { Friends = 'friends', Explore = 'explore' }
 export class FriendPanel extends Component {
     // 共用 UI
     @property(Node) floatingNode: Node = null!;                // 提示浮動訊息
+    @property(ConfirmDialogManager) confirmDialogManager: ConfirmDialogManager = null!; // 提示面板
     @property(SpriteFrame) defaultAvatar: SpriteFrame = null!; // 頭像預設圖片
     @property(Prefab) emptyStatePrefab: Prefab = null!;        // 空狀態或分隔線提示文字
 
@@ -37,7 +39,7 @@ export class FriendPanel extends Component {
         this.switchTab(this.currentTab);
     }
 
-    onDisable() {          // 解除事件，避免重複綁定
+    onDisable() {
         this.unbindEvents();
     }
 
@@ -51,12 +53,12 @@ export class FriendPanel extends Component {
         this.friendsTabBtn?.node.on(Button.EventType.CLICK, this.onClickFriendsTab, this);
         this.searchBtn?.node.on(Button.EventType.CLICK, this.onClickSearch, this);
     }
+
     private unbindEvents() {
         this.exploreTabBtn?.node.off(Button.EventType.CLICK, this.onClickExploreTab, this);
         this.friendsTabBtn?.node.off(Button.EventType.CLICK, this.onClickFriendsTab, this);
         this.searchBtn?.node.off(Button.EventType.CLICK, this.onClickSearch, this);
     }
-
 
     /** 分頁切換 */
     private onClickFriendsTab() { this.switchTab(TabKind.Friends); }
@@ -78,7 +80,6 @@ export class FriendPanel extends Component {
             await this.refreshExploreList();
         }
     }
-
 
     /** 分頁按鈕視覺切換 */
     private updateTabVisual() {
@@ -123,6 +124,20 @@ export class FriendPanel extends Component {
             for (const f of friends) {
                 const row = instantiate(this.friendRowPrefab);
                 const nameLabel = row.getChildByName('NameLabel')?.getComponent(Label);
+                const deleteBtn = row.getChildByName('DeleteBtn')?.getComponent(Button);
+
+                // 刪除按鈕點擊
+                deleteBtn?.node.on(Button.EventType.CLICK, async () => {
+                    const friendName = f.displayName || f.userId || '這位好友';
+                    if (!this.confirmDialogManager) {
+                        console.warn('[FriendPanel] confirm manager missing; skipping ask.');
+                        return;
+                    }
+                    const ok = await this.confirmDialogManager.ask(`確定要刪除「${friendName}」嗎？`);
+                    if (!ok) return;
+                    await this.deleteFriend(f, deleteBtn);
+                }, this);
+
                 if (nameLabel) nameLabel.string = f.displayName || '(未設定暱稱)';
                 const idLabel = row.getChildByName('IdLabel')?.getComponent(Label);
                 if (idLabel) idLabel.string = f.userId;
@@ -198,10 +213,9 @@ export class FriendPanel extends Component {
         }
     }
 
-
     /** 點擊搜尋好友 */
     async onClickSearch() {
-        // 若不在探索分頁，先切過去（避免塞到朋友分頁的 list）
+        // 切到探索分頁
         if (this.currentTab !== TabKind.Explore) {
             await this.switchTab(TabKind.Explore);
         }
@@ -217,7 +231,7 @@ export class FriendPanel extends Component {
 
         try {
             list.removeAllChildren();
-            
+
             const loadingNode = this.addEmptyStateToList(list, '搜尋中…');
             const user = await DataManager.lookupUserById(queryId);
 
@@ -341,19 +355,21 @@ export class FriendPanel extends Component {
         }
 
         node.parent = list;
-        return node; 
+        return node;
     }
 
     /** 統一設定邀請按鈕狀態與事件 */
     private setupInviteButton(inviteBtn: Button, userId: string, friends: Array<{ userId: string }>, reqs: { incoming: any[], outgoing: any[] }) {
+        // 先清除舊的事件監聽（避免之前狀態殘留）
+        inviteBtn.node.off(Button.EventType.CLICK);
+
         const isFriend = friends?.some(f => f.userId === userId);
         const hasOutgoingPending = reqs?.outgoing?.some(r => r.toUserId === userId && r.status === 'pending');
         const hasIncomingPending = reqs?.incoming?.some(r => r.fromUserId === userId && r.status === 'pending');
 
-        // 先清除舊的事件監聽，避免重複觸發
-        inviteBtn.node.off(Button.EventType.CLICK);
-
-        if (isFriend) {
+        if ((friends?.length) >= DataManager.FRIEND_LIMIT) {
+            this.setInviteBtn(inviteBtn, '好友已滿', false);
+        } else if (isFriend) {
             this.setInviteBtn(inviteBtn, '已是好友', false);
         } else if (hasOutgoingPending) {
             this.setInviteBtn(inviteBtn, '已送出邀請', false);
@@ -388,10 +404,36 @@ export class FriendPanel extends Component {
                     this.node.emit('refresh-mail-badge');
                 } catch (e) {
                     console.warn('sendFriendRequest failed:', e);
-                    this.setInviteBtn(inviteBtn, '送出邀請', true);
-                    showFloatingTextCenter(this.floatingNode, '邀請失敗，請稍後再試');
+                    // 辨識後端上限錯誤碼，改成好友已滿並禁用 
+                    const code = (e as any)?.code;
+                    if (code === 'friend_limit_reached' || code === 'friend_limit_reached_sender' || code === 'friend_limit_reached_recipient') {
+                        this.setInviteBtn(inviteBtn, '好友已滿', false);
+                        showFloatingTextCenter(this.floatingNode, '你的好友數量或對方已滿，無法新增');
+                    } else {
+                        this.setInviteBtn(inviteBtn, '送出邀請', true);
+                        showFloatingTextCenter(this.floatingNode, '邀請失敗，請稍後再試');
+                    }
                 }
             }, this);
+        }
+    }
+
+    async deleteFriend(f: { userId: string, displayName?: string }, deleteBtn?: Button) {
+        console.log('[FriendPanel] deleteFriend enter', f?.userId, f?.displayName, 'btn:', !!deleteBtn);
+        try {
+            if (deleteBtn) deleteBtn.interactable = false;
+            await DataManager.deleteFriend(f.userId);
+            console.log('[FriendPanel] deleteFriend success for', f.userId);
+            showFloatingTextCenter(this.floatingNode, '已解除好友關係');
+
+            await this.refreshFriendsList();
+            if (this.currentTab === TabKind.Explore) {
+                await this.refreshExploreList();
+            }
+        } catch (e) {
+            console.warn('[FriendPanel] deleteFriend failed:', e);
+            showFloatingTextCenter(this.floatingNode, '刪除失敗，請稍後再試');
+            if (deleteBtn) deleteBtn.interactable = true;
         }
     }
 
