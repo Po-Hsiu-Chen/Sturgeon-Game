@@ -10,10 +10,15 @@ import { authWithLine } from './api/Api';
 import { ConfirmDialogManager } from './ConfirmDialogManager';
 
 const { ccclass, property } = _decorator;
+
+// -----------------------------常數 / 類別屬性--------------------------------
 const LIFF_ID = '2007937783-PJ4ZRBdY';
-const RED = new Color(255, 0, 0, 255);    // 紅色
+const RED = new Color(255, 0, 0, 255);       // 紅色
 const GREEN = new Color(120, 198, 80, 255);  // 綠色
-const BLUE = new Color(0, 0, 255, 255);   // 藍色
+const BLUE = new Color(0, 0, 255, 255);      // 藍色
+
+const COST_ADD_DIRECT = 80;                  // 第二缸後直接加魚
+const COST_ADD_BABY = 50;                    // 生魚寶寶
 
 const TankAssets = {
     backgrounds: new Map<string, SpriteFrame>(),
@@ -25,13 +30,15 @@ export class GameManager extends Component {
     @property(Node) floatingNode: Node = null!;                 // 提示浮動訊息
     @property(ConfirmDialogManager) confirmDialogManager: ConfirmDialogManager = null!;
     @property(TombManager) tombManager: TombManager = null!;
-    
+
     // 魚缸與魚類
     @property(Node) activeTankViewport: Node = null!;
     @property(Node) fishArea: Node = null!;                     // 魚活動區域
     @property(SpriteFrame) defaultBackgroundSpriteFrame: SpriteFrame = null!; // 預設魚缸背景
     @property([Prefab]) maleFishPrefabsByStage: Prefab[] = [];  // 公魚：第 1~6 階
     @property([Prefab]) femaleFishPrefabsByStage: Prefab[] = [];// 母魚：第 1~6 階
+    @property([Prefab]) maleStage6FormPrefabs: Prefab[] = [];   // 公魚：第 6 階醜魚
+    @property([Prefab]) femaleStage6FormPrefabs: Prefab[] = []; // 母魚：第 6 階醜魚
     @property([Button]) tankButtons: Button[] = [];             // 魚缸按鈕
     @property(Button) tombTankBtn: Button = null!;              // 墓地魚缸按鈕
     @property(Node) tombTankNode: Node = null!;                 // 墓地魚缸節點
@@ -76,13 +83,41 @@ export class GameManager extends Component {
     @property(Button) backToMyTankBtn: Button = null!;          // 返回自己魚缸按鈕
     @property(Node) mailboxRedDot: Node = null!;                // Mail未讀紅點點
 
-    private currentTankId: number = 1;                       // 當前魚缸 ID
+    @property(Button) addFishBtn: Button = null!;               // 加魚按鈕
+    @property(Label) tankFishCountLabel: Label = null!;         // 顯示魚數量/上限
+
+    private currentTankId: number = 1;                          // 當前魚缸 ID
     private offDMChange: (() => void) | null = null;
     private playerData: PlayerData | null = null;
     private isViewingFriend = false;
     private viewingFriend: Pick<PlayerData, 'tankList' | 'fishList' | 'tankEnvironment' | 'userId' | 'displayName'> | null = null;
     private lastNoticeType: 'none' | 'death' | 'env' = 'none';
 
+    // 第六階成魚型態的順序（要和 Inspector 中兩個 Prefab 陣列順序完全一致）
+    private readonly ADULT_FORM_ORDER: FishData["adultForm"][] = [
+        "form1", // 大眼魚
+        "form2", // 胖鯉魚
+        "form3", // 戴眼鏡魚
+        "form4", // 獨角魚
+        "form5", // 鬍鬚魚
+        "form6", // 黃肚魚
+        "form7", // 骨頭魚
+    ];
+
+    private getAdultFormDisplayName(form?: FishData["adultForm"]): string {
+        const map: Record<string, string> = {
+            form1: "大眼魚",
+            form2: "胖鯉魚",
+            form3: "戴眼鏡魚",
+            form4: "獨角魚",
+            form5: "鬍鬚魚",
+            form6: "黃肚魚",
+            form7: "骨頭魚",
+        };
+        return form ? (map[form] ?? "未知型態") : "未知型態";
+    }
+
+    // -----------------------------生命週期 / 啟動流程--------------------------------
     /** 初始化 */
     async start() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -105,6 +140,8 @@ export class GameManager extends Component {
                 await DataManager.init(lineUserId);
             }
             this.playerData = await DataManager.getPlayerDataCached();
+            await this.initCapsAndRules();
+
         } catch (e) {
             console.error('[Game] 啟動失敗：', e);
             return;
@@ -124,14 +161,15 @@ export class GameManager extends Component {
         this.initButtons();
         this.initPanels();
         await this.switchTank(1);
+        this.updateAddFishBtnState();
+        this.updateTankFishCountLabel();
         await this.tombManager?.init();
         await this.refreshEnvironmentUI();
         this.maybeShowEnvNoticeOnEnter();
 
-        // 玩家資料變動時即時刷新 UI
-        this.offDMChange = DataManager.onChange((p) => {
-            this.playerData = p;
-            void this.refreshEnvironmentUI();
+        // 玩家資料變動時跑解鎖檢查、UI 更新
+        this.offDMChange = DataManager.onChange(async (p) => {
+            await this.handlePlayerDataChange(p, 'dm-change');
         });
 
         // 顯示玩家資訊
@@ -142,6 +180,12 @@ export class GameManager extends Component {
         } else {
             this.userAvatar.spriteFrame = this.defaultAvatar;
         }
+    }
+
+    async onDestroy() {
+        this.offDMChange?.();
+        this.offDMChange = null;
+        this.node.scene?.off('mailbox-refreshed', this.onMailboxRefreshed, this);
     }
 
     /** 載入頭貼 */
@@ -165,6 +209,19 @@ export class GameManager extends Component {
         }
     }
 
+    private async setHeaderUser(displayName: string, userId: string, picture?: string) {
+        this.userNameLabel.string = displayName || "未命名";
+        this.userIdLabel.string = userId || "";
+
+        if (picture) {
+            await this.loadAvatar(picture);
+        } else {
+            this.userAvatar.spriteFrame = this.defaultAvatar;
+        }
+    }
+
+    // -----------------------------UI 初始化--------------------------------
+
     /** 初始化所有按鈕事件 */
     initButtons() {
         // 魚缸切換按鈕
@@ -182,6 +239,11 @@ export class GameManager extends Component {
 
         // 返回按鈕
         this.backToMyTankBtn?.node.on(Node.EventType.TOUCH_END, () => this.backToMyTank());
+
+        // 加魚按鈕
+        this.addFishBtn.node.on(Node.EventType.TOUCH_END, async () => {
+            await this.onClickAddFish();
+        });
     }
 
     /** 初始化面板事件與狀態 */
@@ -206,6 +268,32 @@ export class GameManager extends Component {
         // 隱藏返回按鈕
         if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = false;
     }
+
+    /** 收到 MailboxPanel 廣播時的處理 */
+    private onMailboxRefreshed = ({ unread }: { unread: number }) => {
+        this.applyMailboxBadge(unread);
+    };
+
+    /** 進入遊戲時主動抓一次未讀數 */
+    private async refreshMailboxBadge() {
+        try {
+            const all = await DataManager.getInbox();
+            const unread = all.filter(x => x.status === 'unread').length;
+            this.applyMailboxBadge(unread);
+        } catch (e) {
+            // 拿不到就先關掉紅點
+            this.applyMailboxBadge(0);
+        }
+    }
+
+    /** 控制紅點 */
+    private applyMailboxBadge(unread: number) {
+        if (this.mailboxRedDot) {
+            this.mailboxRedDot.active = unread > 0;
+        }
+    }
+
+    // -----------------------------場景切換與渲染--------------------------------
 
     private getActiveViewport(): Node {
         return this.activeTankViewport ?? this.node; // 總是用共用視窗來畫
@@ -265,7 +353,16 @@ export class GameManager extends Component {
             if (!fish || fish.isDead) continue;
 
             const si = Math.max(0, (fish.stage || 1) - 1);
-            const prefab = fish.gender === 'female' ? femalePrefabs[si] : malePrefabs[si];
+            let prefab: Prefab | undefined;
+
+            if (fish.stage === 6 && fish.adultForm) {
+                const formIndex = this.formToIndex(fish.adultForm);
+                const list = fish.gender === 'female' ? this.femaleStage6FormPrefabs : this.maleStage6FormPrefabs;
+                prefab = list[formIndex] ?? list[0]; // 保底
+            } else {
+                prefab = fish.gender === 'female' ? femalePrefabs[si] : malePrefabs[si];
+            }
+
             if (!prefab) continue;
 
             const node = instantiate(prefab);
@@ -289,13 +386,6 @@ export class GameManager extends Component {
         }
     }
 
-    private onClickTankButton(index: number) {
-        if (this.isViewingFriend && this.viewingFriend) {
-            this.renderFriendTankByIndex(index);
-        } else {
-            this.switchTank(index + 1);
-        }
-    }
 
     /** 顯示自己的缸 */
     async switchTank(tankId: number) {
@@ -323,6 +413,8 @@ export class GameManager extends Component {
             envForEmotion: this.playerData!.tankEnvironment,    // 用自己的環境
             readOnly: false                                     // 自己的魚非唯讀
         });
+        this.updateTankFishCountLabel();
+        this.updateAddFishBtnState();
         await this.refreshEnvironmentUI();
     }
 
@@ -382,7 +474,7 @@ export class GameManager extends Component {
         const friend = this.viewingFriend;
         const tank = friend.tankList?.[idx];
         if (!tank) {
-            showFloatingTextCenter(this.floatingNode, '這個朋友沒有此魚缸');
+            showFloatingTextCenter(this.floatingNode, '朋友的這個魚缸還沒解鎖喔～');
             return;
         }
 
@@ -419,11 +511,11 @@ export class GameManager extends Component {
         this.activeTankViewport.active = false; // 關閉主視圖
         this.tombTankNode.active = true;        // 顯示墓園
 
-        // 墓地魚缸不顯示環境遮罩
         if (this.dirtyWaterOverlay) this.dirtyWaterOverlay.active = false;
         if (this.coldOverlay) this.coldOverlay.active = false;
         if (this.hotOverlay) this.hotOverlay.active = false;
 
+        this.updateAddFishBtnState();
         await this.tombManager?.refreshTombs();
     }
 
@@ -435,6 +527,8 @@ export class GameManager extends Component {
         if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = false;
         await this.switchTank(1);
     }
+
+    // -----------------------------每日流程 / 環境顯示--------------------------------
 
     /** 處理魚飢餓與成長 */
     async processDailyUpdate() {
@@ -490,6 +584,12 @@ export class GameManager extends Component {
                 const upgraded = FishLogic.tryStageUpgradeByGrowthDays(fish);
                 if (upgraded) {
                     console.log(`${fish.name} 升級為第 ${fish.stage} 階！（自然長大）`);
+                    // 第六階決定形態 + 通知 
+                    if (fish.stage === 6 && !fish.adultForm) {
+                        fish.adultForm = this.pickAdultForm(fish, this.playerData);
+                        const formName = this.getAdultFormDisplayName(fish.adultForm);
+                        this.showNotice(`${fish.name} 已成為第六階，屬於「${formName}」型態！`, 'env');
+                    }
                 }
             }
 
@@ -542,11 +642,276 @@ export class GameManager extends Component {
         // 更新記錄的時間
         this.playerData.lastLoginDate = today;
         this.playerData.lastLoginTime = now.toISOString();
+
+        await this.checkAndUnlockCapacityForFirstTank();
+        await this.checkAndUnlockNextTankIfEligible(1);
+        await this.checkAndUnlockNextTankIfEligible(2);
+
         await DataManager.savePlayerDataWithCache(this.playerData);
 
         await this.refreshEnvironmentUI();
+        this.updateTankFishCountLabel();
+        this.updateAddFishBtnState();
+
         console.log(`更新完成：經過 ${hoursPassed.toFixed(2)} 小時，飢餓與成長資料已更新`);
     }
+
+    /** 玩家資料變更後的後處理：解鎖檢查＋UI 更新（避免重入） */
+    private _handlingDMChange = false;
+    private async handlePlayerDataChange(p?: PlayerData, reason: string = 'dm-change') {
+        if (this._handlingDMChange) return;
+        this._handlingDMChange = true;
+        try {
+            if (p) this.playerData = p;
+
+            // 跑一次解鎖檢查（包含：第一缸 3→5、以及可能的開新缸）
+            await this.checkAndUnlockCapacityForFirstTank();
+            await this.checkAndUnlockNextTankIfEligible(1);
+            await this.checkAndUnlockNextTankIfEligible(2);
+
+            // 更新畫面（不要在這裡 switchTank，以免多重渲染或觸發連鎖）
+            await this.refreshEnvironmentUI();
+            this.updateTankFishCountLabel();
+            this.updateAddFishBtnState();
+
+            // 可選：如果當前在墓地頁，叫墓地刷新一次（讓被復活的魚立刻消失）
+            await this.tombManager?.refreshTombs?.();
+
+        } finally {
+            this._handlingDMChange = false;
+        }
+    }
+
+    /** 資料刷新 */
+    async refreshEnvironmentUI() {
+        if (!this.playerData) return;
+
+        const env = this.playerData.tankEnvironment;
+        const items = this.playerData.inventory.items;
+
+        // 水溫、水質顯示
+        if (this.temperatureLabel) this.temperatureLabel.string = `${env.temperature.toFixed(1)}°C`;
+        if (env.temperature < this.minComfortTemp) {
+            this.temperatureLabel.color = BLUE; // 冷
+        } else if (env.temperature > this.maxComfortTemp) {
+            this.temperatureLabel.color = RED;  // 熱
+        }
+        else {
+            this.temperatureLabel.color = GREEN; // 正常
+        }
+
+        if (this.waterQualityLabel) this.waterQualityLabel.string = env.waterQualityStatus === 'clean' ? 'Clean' : 'Dirty';
+        if (this.waterQualityLabel) this.waterQualityLabel.color = env.waterQualityStatus === 'clean' ? GREEN : RED;
+
+        // 顯示髒水遮罩
+        if (this.dirtyWaterOverlay) {
+            this.dirtyWaterOverlay.active = (env.waterQualityStatus !== 'clean');
+        }
+
+        //顯示龍骨數量
+        if (this.dragonboneLabel) this.dragonboneLabel.string = this.playerData.dragonBones.toString();
+
+        //顯示魚數量
+        if (this.fishCountLabel) this.fishCountLabel.string = this.playerData.fishList.length.toString();
+
+        // 道具數量
+        if (this.heaterCountLabel) this.heaterCountLabel.string = `${items.heater}`;
+        if (this.fanCountLabel) this.fanCountLabel.string = `${items.fan}`;
+        if (this.brushCountLabel) this.brushCountLabel.string = `${items.brush}`;
+
+        // 按鈕能否點擊
+        const isTooCold = env.temperature < this.minComfortTemp;
+        const isTooHot = env.temperature > this.maxComfortTemp;
+
+        if (this.heaterBtn) this.heaterBtn.interactable = items.heater > 0 && isTooCold;
+        if (this.fanBtn) this.fanBtn.interactable = items.fan > 0 && isTooHot;
+        if (this.brushBtn) this.brushBtn.interactable = items.brush > 0; // 刷子不受溫度限制
+
+        this.updateEnvironmentOverlays(env);
+    }
+
+    private updateEnvironmentOverlays(env: any) {
+        // 墓地魚缸不顯示遮罩
+        if (this.tombTankNode && this.tombTankNode.active) {
+            if (this.dirtyWaterOverlay) this.dirtyWaterOverlay.active = false;
+            if (this.coldOverlay) this.coldOverlay.active = false;
+            if (this.hotOverlay) this.hotOverlay.active = false;
+            return;
+        }
+
+        const isDirty = env.waterQualityStatus !== 'clean';
+        const tooCold = env.temperature < this.minComfortTemp;
+        const tooHot = env.temperature > this.maxComfortTemp;
+
+        if (this.dirtyWaterOverlay) this.dirtyWaterOverlay.active = isDirty;
+        if (this.coldOverlay) this.coldOverlay.active = !isDirty && tooCold; // 髒水優先
+        if (this.hotOverlay) this.hotOverlay.active = !isDirty && tooHot;  // 髒水優先
+    }
+
+    /** 首次進入時，如環境異常則用 NoticePanel 提醒（死亡優先，不覆蓋） */
+    private maybeShowEnvNoticeOnEnter() {
+        if (!this.playerData) return;
+
+        // 不在自己缸、不在主視圖時不提示
+        if (this.isViewingFriend) return;
+        if (this.tombTankNode?.active) return;
+
+        // 如果已經有死亡通知在畫面上，就不要蓋掉（優先權：death > env）
+        if (this.noticePanel?.active && this.lastNoticeType === 'death') return;
+
+        const env = this.playerData.tankEnvironment;
+        const tooCold = env.temperature < this.minComfortTemp;
+        const tooHot = env.temperature > this.maxComfortTemp;
+        const isDirty = env.waterQualityStatus !== 'clean';
+
+        // 依優先序：髒 > 冷 > 熱
+        if (isDirty) {
+            this.showNotice('魚缸髒髒的～快用魚缸刷清潔魚缸', 'env');
+            return;
+        }
+        if (tooCold) {
+            this.showNotice('魚缸好冷呀～快用加熱器升溫', 'env');
+            return;
+        }
+        if (tooHot) {
+            this.showNotice('魚缸快煮沸啦～快用風扇降溫救救小魚', 'env');
+            return;
+        }
+    }
+
+    showNotice(message: string, type: 'death' | 'env' = 'env') {
+        this.lastNoticeType = type;
+        this.noticeLabel.string = message;
+        this.noticePanel.active = true;
+    }
+
+    // -----------------------------道具使用--------------------------------
+
+    /** 使用加熱器（點擊） */
+    async onClickHeater() {
+        const items = this.playerData.inventory.items;
+        const env = this.playerData.tankEnvironment;
+
+        if (items.heater <= 0) {
+            showFloatingTextCenter(this.floatingNode, '加熱器庫存不足');
+            return;
+        }
+        if (env.temperature >= this.minComfortTemp && env.temperature <= this.maxComfortTemp) {
+            showFloatingTextCenter(this.floatingNode, '目前水溫正常，無需使用加熱器');
+            return;
+        }
+        if (env.temperature > this.maxComfortTemp) {
+            showFloatingTextCenter(this.floatingNode, '目前為高溫狀態，請使用風扇');
+            return;
+        }
+        const ok = await this.confirmDialogManager.ask('確定要使用加熱器嗎？');
+        if (!ok) return;
+        await this.useHeater();
+    }
+
+    /** 真正執行加熱器 */
+    private async useHeater() {
+        const items = this.playerData.inventory.items;
+        const env = this.playerData.tankEnvironment;
+
+        if (items.heater <= 0) {
+            showFloatingTextCenter(this.floatingNode, '加熱器庫存不足');
+            return;
+        }
+        // 再次保險檢查
+        if (env.temperature >= this.minComfortTemp) {
+            showFloatingTextCenter(this.floatingNode, '目前水溫不低，不需使用加熱器');
+            return;
+        }
+
+        items.heater -= 1;
+        TankEnvironmentManager.adjustTemperature(this.playerData);
+
+        await DataManager.savePlayerDataWithCache(this.playerData);
+        await this.refreshEnvironmentUI();
+        showFloatingTextCenter(this.floatingNode, '已使用加熱器');
+    }
+
+    /** 使用風扇（點擊） */
+    async onClickFan() {
+        const items = this.playerData.inventory.items;
+        const env = this.playerData.tankEnvironment;
+
+        if (items.fan <= 0) {
+            showFloatingTextCenter(this.floatingNode, '風扇庫存不足');
+            return;
+        }
+        if (env.temperature >= this.minComfortTemp && env.temperature <= this.maxComfortTemp) {
+            showFloatingTextCenter(this.floatingNode, '目前水溫正常，無需使用風扇');
+            return;
+        }
+        if (env.temperature < this.minComfortTemp) {
+            showFloatingTextCenter(this.floatingNode, '目前為低溫狀態，請使用加熱器');
+            return;
+        }
+        const ok = await this.confirmDialogManager.ask('確定要使用風扇嗎？');
+        if (!ok) return;
+        await this.useFan();
+    }
+
+    /** 真正執行風扇 */
+    private async useFan() {
+        const items = this.playerData.inventory.items;
+        const env = this.playerData.tankEnvironment;
+
+        if (items.fan <= 0) {
+            showFloatingTextCenter(this.floatingNode, '風扇庫存不足');
+            return;
+        }
+        // 再次保險檢查
+        if (env.temperature <= this.maxComfortTemp) {
+            showFloatingTextCenter(this.floatingNode, '目前水溫不高，不需使用風扇');
+            return;
+        }
+
+        items.fan -= 1;
+        TankEnvironmentManager.adjustTemperature(this.playerData);
+
+        await DataManager.savePlayerDataWithCache(this.playerData);
+        await this.refreshEnvironmentUI();
+        showFloatingTextCenter(this.floatingNode, '已使用風扇');
+    }
+
+    /** 使用魚缸刷（點擊） */
+    async onClickBrush() {
+        const items = this.playerData.inventory.items;
+        const env = this.playerData.tankEnvironment;
+
+        if (items.brush <= 0) {
+            showFloatingTextCenter(this.floatingNode, '魚缸刷庫存不足');
+            return;
+        }
+        if (env.waterQualityStatus === "clean") {
+            showFloatingTextCenter(this.floatingNode, '目前魚缸很乾淨，無需使用魚缸刷');
+            return;
+        }
+        const ok = await this.confirmDialogManager.ask('確定要使用魚缸刷嗎？');
+        if (!ok) return;
+        await this.useBrush();
+    }
+
+    /** 真正執行魚缸刷 */
+    private async useBrush() {
+        const items = this.playerData.inventory.items;
+
+        if (items.brush <= 0) {
+            showFloatingTextCenter(this.floatingNode, '魚缸刷庫存不足');
+            return;
+        }
+        items.brush -= 1;
+        TankEnvironmentManager.cleanWater(this.playerData);
+
+        await DataManager.savePlayerDataWithCache(this.playerData);
+        await this.refreshEnvironmentUI();
+        showFloatingTextCenter(this.floatingNode, '已清潔魚缸');
+    }
+
+    // -----------------------------魚的呈現 / 節點替換--------------------------------
 
     /** 生成魚的實體節點 */
     async spawnFishInTank(tankId: number) {
@@ -607,10 +972,19 @@ export class GameManager extends Component {
 
         // 根據性別與階段取得 prefab
         const stageIndex = fishData.stage - 1;
-        const isMale = fishData.gender === 'male';
-        const prefab = isMale
-            ? this.maleFishPrefabsByStage[stageIndex]
-            : this.femaleFishPrefabsByStage[stageIndex];
+        let prefab: Prefab | undefined;
+
+        if (fishData.stage === 6 && fishData.adultForm) {
+            const formIndex = this.formToIndex(fishData.adultForm);
+            prefab = fishData.gender === 'female'
+                ? this.femaleStage6FormPrefabs[formIndex]
+                : this.maleStage6FormPrefabs[formIndex];
+        } else {
+            prefab = fishData.gender === 'male'
+                ? this.maleFishPrefabsByStage[stageIndex]
+                : this.femaleFishPrefabsByStage[stageIndex];
+        }
+
 
         if (!prefab) {
             console.warn(`找不到對應魚 prefab：stage=${fishData.stage}, gender=${fishData.gender}`);
@@ -634,274 +1008,238 @@ export class GameManager extends Component {
         return newFishNode;
     }
 
-    showNotice(message: string, type: 'death' | 'env' = 'env') {
-        this.lastNoticeType = type;
-        this.noticeLabel.string = message;
-        this.noticePanel.active = true;
-    }
+    // -----------------------------成長/解鎖規則--------------------------------
 
-
-    /** 資料刷新 */
-    async refreshEnvironmentUI() {
+    /** 針對舊資料補預設值 + 規則初始化 */
+    private async initCapsAndRules() {
         if (!this.playerData) return;
 
-        const env = this.playerData.tankEnvironment;
-        const items = this.playerData.inventory.items;
-
-        // 水溫、水質顯示
-        if (this.temperatureLabel) this.temperatureLabel.string = `${env.temperature.toFixed(1)}°C`;
-        if (env.temperature < this.minComfortTemp) {
-            this.temperatureLabel.color = BLUE; // 冷
-        } else if (env.temperature > this.maxComfortTemp) {
-            this.temperatureLabel.color = RED;  // 熱
-        }
-        else {
-            this.temperatureLabel.color = GREEN; // 正常
+        // 為每個缸補 capacity：第一缸預設3，其它缸預設5
+        for (const tank of this.playerData.tankList) {
+            if (tank.capacity == null) {
+                tank.capacity = (tank.id === 1) ? 3 : 5;
+            }
         }
 
-        if (this.waterQualityLabel) this.waterQualityLabel.string = env.waterQualityStatus === 'clean' ? 'Clean' : 'Dirty';
-        if (this.waterQualityLabel) this.waterQualityLabel.color = env.waterQualityStatus === 'clean' ? GREEN : RED;
+        // 若當前只有第一缸，且已達「3隻≥3階」，就把第一缸容量升到5
+        await this.checkAndUnlockCapacityForFirstTank();
 
-        // 顯示髒水遮罩
-        if (this.dirtyWaterOverlay) {
-            this.dirtyWaterOverlay.active = (env.waterQualityStatus !== 'clean');
-        }
-
-        //顯示龍骨數量
-        if (this.dragonboneLabel) this.dragonboneLabel.string = this.playerData.dragonBones.toString();
-
-        //顯示魚數量
-        if (this.fishCountLabel) this.fishCountLabel.string = this.playerData.fishList.length.toString();
-
-        // 道具數量
-        if (this.heaterCountLabel) this.heaterCountLabel.string = `${items.heater}`;
-        if (this.fanCountLabel) this.fanCountLabel.string = `${items.fan}`;
-        if (this.brushCountLabel) this.brushCountLabel.string = `${items.brush}`;
-
-        // 按鈕能否點擊
-        const isTooCold = env.temperature < this.minComfortTemp;
-        const isTooHot = env.temperature > this.maxComfortTemp;
-
-        if (this.heaterBtn) this.heaterBtn.interactable = items.heater > 0 && isTooCold;
-        if (this.fanBtn) this.fanBtn.interactable = items.fan > 0 && isTooHot;
-        if (this.brushBtn) this.brushBtn.interactable = items.brush > 0; // 刷子不受溫度限制
-
-        this.updateEnvironmentOverlays(env);
+        // 若符合開新缸條件，幫玩家補開（最多到3缸）
+        await this.checkAndUnlockNextTankIfEligible(1); // 先看第一缸
+        await this.checkAndUnlockNextTankIfEligible(2); // 若已經有第二缸，也檢查第二缸
     }
 
-    /** 首次進入時，如環境異常則用 NoticePanel 提醒（死亡優先，不覆蓋） */
-    private maybeShowEnvNoticeOnEnter() {
+    /** 取某缸的 Fish 物件陣列（排除死亡） */
+    private getAliveFishInTank(tankId: number) {
+        const tank = this.playerData?.tankList.find(t => t.id === tankId);
+        if (!tank || !this.playerData) return [];
+        return tank.fishIds
+            .map(id => this.playerData!.fishList.find(f => f.id === id))
+            .filter(f => f && !f.isDead) as typeof this.playerData.fishList;
+    }
+
+    /** 是否有尚未復活的死亡魚（全帳號） */
+    private hasDeadFish(): boolean {
+        return !!this.playerData?.fishList.some(f => f.isDead);
+    }
+
+
+    /** 若只有第一缸，且第一缸3隻都≥3階 → 將第一缸 capacity 從3升到5 */
+    private async checkAndUnlockCapacityForFirstTank() {
+        if (!this.playerData) return;
+        if (this.playerData.tankList.length !== 1) return; // 只在「只有第一缸」時有效
+
+        const tank1 = this.playerData.tankList.find(t => t.id === 1);
+        if (!tank1) return;
+
+        if ((tank1.capacity ?? 3) >= 5) return; // 已經5就不用動
+
+        // 至少有 3 隻達標
+        const fish = this.getAliveFishInTank(1);
+        const countGte3 = fish.filter(f => (f.stage ?? 1) >= 3).length;
+        if ((tank1.capacity ?? 3) < 5 && countGte3 >= 3) {
+            tank1.capacity = 5;
+            await DataManager.savePlayerDataWithCache(this.playerData);
+            showFloatingTextCenter(this.floatingNode, "第一缸容量解鎖：3 → 5！");
+        }
+
+    }
+
+    /** 若某缸5隻都≥6階 → 開啟下一缸（最多三缸），新缸capacity=5 */
+    private async checkAndUnlockNextTankIfEligible(tankId: number) {
+        if (!this.playerData) return;
+        // 最多三缸
+        if (this.playerData.tankList.length >= 3) return;
+
+        const tank = this.playerData.tankList.find(t => t.id === tankId);
+        if (!tank) return;
+
+        // 需要「該缸容量至少是5」且「有5隻活魚」且「全部≥6階」
+        const fish = this.getAliveFishInTank(tankId);
+        if ((tank.capacity ?? (tankId === 1 ? 3 : 5)) < 5) return;
+        if (fish.length < 5) return;
+        if (!fish.every(f => (f.stage ?? 1) >= 6)) return;
+
+        // 開新缸（id=現在已有缸數+1），capacity=5
+        const newTankId = this.playerData.tankList.length + 1;
+        this.playerData.tankList.push({
+            id: newTankId,
+            name: `魚缸 ${newTankId}`,
+            comfort: 100,
+            fishIds: [],
+            capacity: 5
+        });
+        await DataManager.savePlayerDataWithCache(this.playerData);
+        showFloatingTextCenter(this.floatingNode, `成功開啟第 ${newTankId} 缸！`);
+    }
+
+    private formToIndex(form: FishData["adultForm"]): number {
+        const i = this.ADULT_FORM_ORDER.indexOf(form || "form1");
+        return i >= 0 ? i : 0;
+    }
+
+    private pickAdultForm(fish: FishData, player: PlayerData): FishData["adultForm"] {
+        // 等機率版本；若要做稀有度，可把 weights 換成你要的權重
+        const forms = this.ADULT_FORM_ORDER;
+        const i = Math.floor(Math.random() * forms.length);
+        return forms[i];
+    }
+
+    // -----------------------------加魚行為--------------------------------
+
+    /** 建立一條新魚（最簡版） */
+    private createFish(tankId: number) {
+        const pd = this.playerData!;
+        const nextId = (pd.fishList.reduce((m, f) => Math.max(m, f.id), 0) || 0) + 1;
+        const genders: Array<"male" | "female"> = ["male", "female"];
+        const fish = {
+            id: nextId,
+            name: `鱘龍${nextId}號`,
+            gender: genders[Math.floor(Math.random() * genders.length)],
+            stage: 1,
+            growthDaysPassed: 0,
+            lastFedDate: new Date().toISOString(),
+            hunger: 50,
+            hungerRateMultiplier: 1,
+            appearance: "beautiful" as const,
+            outfit: { head: null, accessories: [] },
+            isMarried: false,
+            spouseId: null,
+            status: { hungry: false, hot: false, cold: false, sick: false },
+            emotion: "happy" as const,
+            isDead: false,
+            tankId,
+        } as const;
+
+        pd.fishList.push(fish as any);
+        const tank = pd.tankList.find(t => t.id === tankId)!;
+        tank.fishIds.push(fish.id);
+    }
+
+    /** 取得「直接加魚」花費（只有第一缸存在時免費） */
+    private getDirectAddCost(): number {
+        return (this.playerData!.tankList.length === 1) ? 0 : COST_ADD_DIRECT;
+    }
+
+    /** 檢查是否允許在指定魚缸加魚（墓地、滿缸、找不到缸…） */
+    private canAddFish(tankId: number): { ok: boolean; msg?: string } {
+        if (!this.playerData) return { ok: false, msg: '資料尚未就緒' };
+        if (this.isViewingFriend || this.tombTankNode?.active) return { ok: false, msg: '此畫面不可加魚' };
+        if (this.hasDeadFish()) return { ok: false, msg: '有小魚在墓地等你，先去把牠抱回家吧～' };
+
+        const tank = this.playerData.tankList.find(t => t.id === tankId);
+        if (!tank) return { ok: false, msg: '找不到此魚缸' };
+
+        const cap = tank.capacity ?? (tank.id === 1 ? 3 : 5);
+        const alive = this.getAliveFishInTank(tankId).length;
+        if (alive >= cap) return { ok: false, msg: '已達魚缸上限' };
+
+        return { ok: true };
+    }
+
+    /** 扣款→生魚→存檔→切缸→更新UI→提示 */
+    private async commitAddFish(tankId: number, cost: number, toast: string) {
+        const pd = this.playerData!;
+        if (cost > 0) {
+            if ((pd.dragonBones ?? 0) < cost) { showFloatingTextCenter(this.floatingNode, '龍骨不夠…再努力存一下吧！'); return; }
+            pd.dragonBones -= cost;
+        }
+        this.createFish(tankId);
+        await DataManager.savePlayerDataWithCache(pd);
+        await this.switchTank(tankId);
+        this.updateTankFishCountLabel();
+        this.updateAddFishBtnState();
+        showFloatingTextCenter(this.floatingNode, toast);
+    }
+
+    /** 點擊加魚按鈕 */
+    public async onClickAddFish() {
+        const tankId = this.currentTankId;
+        const guard = this.canAddFish(tankId);
+        if (!guard.ok) {
+            if (guard.msg) showFloatingTextCenter(this.floatingNode, guard.msg);
+            if (this.hasDeadFish()) await this.switchToTombTank();
+            return;
+        }
+
+        // 組確認訊息
+        const tank = this.playerData!.tankList.find(t => t.id === tankId)!;
+        const cap = tank.capacity ?? (tank.id === 1 ? 3 : 5);
+        const alive = this.getAliveFishInTank(tankId).length;
+        const cost = this.getDirectAddCost();
+        const bones = this.playerData!.dragonBones ?? 0;
+        const msg = (cost === 0)
+            ? `要把一隻小魚請回家嗎？（免費）\n目前：${alive} / ${cap}`
+            : `要花 ${cost} 龍骨收編一隻小魚嗎？\n目前：${alive} / ${cap}\n你有：${bones} 龍骨`;
+
+        const ok = await this.confirmDialogManager.ask(msg);
+        if (!ok) return;
+
+        await this.commitAddFish(tankId, cost, cost === 0 ? '恭喜～魚寶寶誕生啦！' : `已花費 ${cost} 龍骨`);
+    }
+
+    private updateTankFishCountLabel() {
         if (!this.playerData) return;
 
-        // 不在自己缸、不在主視圖時不提示
-        if (this.isViewingFriend) return;
-        if (this.tombTankNode?.active) return;
+        const tank = this.playerData.tankList.find(t => t.id === this.currentTankId);
+        if (!tank) return;
 
-        // 如果已經有死亡通知在畫面上，就不要蓋掉（優先權：death > env）
-        if (this.noticePanel?.active && this.lastNoticeType === 'death') return;
+        const aliveFish = this.getAliveFishInTank(this.currentTankId).length;
+        const capacity = tank.capacity ?? (tank.id === 1 ? 3 : 5);
 
-        const env = this.playerData.tankEnvironment;
-        const tooCold = env.temperature < this.minComfortTemp;
-        const tooHot = env.temperature > this.maxComfortTemp;
-        const isDirty = env.waterQualityStatus !== 'clean';
-
-        // 依優先序：髒 > 冷 > 熱
-        if (isDirty) {
-            this.showNotice('魚缸髒髒的～快用魚缸刷清潔魚缸', 'env');
-            return;
-        }
-        if (tooCold) {
-            this.showNotice('魚缸好冷呀～快用加熱器升溫', 'env');
-            return;
-        }
-        if (tooHot) {
-            this.showNotice('魚缸快煮沸啦～快用風扇降溫救救小魚', 'env');
-            return;
+        if (this.tankFishCountLabel) {
+            this.tankFishCountLabel.string = `${aliveFish} / ${capacity}`;
         }
     }
 
-    async onDestroy() {
-        this.offDMChange?.();
-        this.offDMChange = null;
-        this.node.scene?.off('mailbox-refreshed', this.onMailboxRefreshed, this);
+    private updateAddFishBtnState() {
+        if (!this.playerData || !this.addFishBtn) return;
 
+        // 朋友頁或墓地頁 → 不能加
+        if (this.isViewingFriend || this.tombTankNode?.active) {
+            this.addFishBtn.interactable = false;
+            return;
+        }
+
+        // 有死魚 → 不能加
+        if (this.hasDeadFish()) {
+            this.addFishBtn.interactable = false;
+            return;
+        }
+
+        // 魚滿 → 不能加
+        const tank = this.playerData.tankList.find(t => t.id === this.currentTankId);
+        if (!tank) return;
+        const capacity = tank.capacity ?? (tank.id === 1 ? 3 : 5);
+        const alive = this.getAliveFishInTank(this.currentTankId).length;
+        this.addFishBtn.interactable = alive < capacity;
     }
 
-    /** 收到 MailboxPanel 廣播時的處理 */
-    private onMailboxRefreshed = ({ unread }: { unread: number }) => {
-        this.applyMailboxBadge(unread);
-    };
-
-    /** 進入遊戲時主動抓一次未讀數 */
-    private async refreshMailboxBadge() {
-        try {
-            const all = await DataManager.getInbox();
-            const unread = all.filter(x => x.status === 'unread').length;
-            this.applyMailboxBadge(unread);
-        } catch (e) {
-            // 拿不到就先關掉紅點
-            this.applyMailboxBadge(0);
-        }
-    }
-
-    /** 控制紅點 */
-    private applyMailboxBadge(unread: number) {
-        if (this.mailboxRedDot) {
-            this.mailboxRedDot.active = unread > 0;
-        }
-    }
-
-    /** 使用加熱器（點擊） */
-    async onClickHeater() {
-        const items = this.playerData.inventory.items;
-        const env = this.playerData.tankEnvironment;
-
-        if (items.heater <= 0) {
-            showFloatingTextCenter(this.floatingNode, '加熱器不足');
-            return;
-        }
-        if (env.temperature >= this.minComfortTemp && env.temperature <= this.maxComfortTemp) {
-            showFloatingTextCenter(this.floatingNode, '目前水溫正常，無需使用加熱器');
-            return;
-        }
-        if (env.temperature > this.maxComfortTemp) {
-            showFloatingTextCenter(this.floatingNode, '目前為高溫狀態，請使用風扇');
-            return;
-        }
-        const ok = await this.confirmDialogManager.ask('確定要使用加熱器嗎？');
-        if (!ok) return;
-        await this.useHeater();
-    }
-
-    /** 真正執行加熱器 */
-    private async useHeater() {
-        const items = this.playerData.inventory.items;
-        const env = this.playerData.tankEnvironment;
-
-        if (items.heater <= 0) {
-            showFloatingTextCenter(this.floatingNode, '加熱器不足');
-            return;
-        }
-        // 再次保險檢查
-        if (env.temperature >= this.minComfortTemp) {
-            showFloatingTextCenter(this.floatingNode, '目前水溫不低，不需使用加熱器');
-            return;
-        }
-
-        items.heater -= 1;
-        TankEnvironmentManager.adjustTemperature(this.playerData);
-
-        await DataManager.savePlayerDataWithCache(this.playerData);
-        await this.refreshEnvironmentUI();
-        showFloatingTextCenter(this.floatingNode, '已使用加熱器');
-    }
-
-    /** 使用風扇（點擊） */
-    async onClickFan() {
-        const items = this.playerData.inventory.items;
-        const env = this.playerData.tankEnvironment;
-
-        if (items.fan <= 0) {
-            showFloatingTextCenter(this.floatingNode, '風扇不足');
-            return;
-        }
-        if (env.temperature >= this.minComfortTemp && env.temperature <= this.maxComfortTemp) {
-            showFloatingTextCenter(this.floatingNode, '目前水溫正常，無需使用風扇');
-            return;
-        }
-        if (env.temperature < this.minComfortTemp) {
-            showFloatingTextCenter(this.floatingNode, '目前為低溫狀態，請使用加熱器');
-            return;
-        }
-        const ok = await this.confirmDialogManager.ask('確定要使用風扇嗎？');
-        if (!ok) return;
-        await this.useFan();
-    }
-
-    /** 真正執行風扇 */
-    private async useFan() {
-        const items = this.playerData.inventory.items;
-        const env = this.playerData.tankEnvironment;
-
-        if (items.fan <= 0) {
-            showFloatingTextCenter(this.floatingNode, '風扇不足');
-            return;
-        }
-        // 再次保險檢查
-        if (env.temperature <= this.maxComfortTemp) {
-            showFloatingTextCenter(this.floatingNode, '目前水溫不高，不需使用風扇');
-            return;
-        }
-
-        items.fan -= 1;
-        TankEnvironmentManager.adjustTemperature(this.playerData);
-
-        await DataManager.savePlayerDataWithCache(this.playerData);
-        await this.refreshEnvironmentUI();
-        showFloatingTextCenter(this.floatingNode, '已使用風扇');
-    }
-
-    /** 使用魚缸刷（點擊） */
-    async onClickBrush() {
-        const items = this.playerData.inventory.items;
-        const env = this.playerData.tankEnvironment;
-
-        if (items.brush <= 0) {
-            showFloatingTextCenter(this.floatingNode, '魚缸刷不足');
-            return;
-        }
-        if (env.waterQualityStatus === "clean") {
-            showFloatingTextCenter(this.floatingNode, '目前魚缸很乾淨，無需使用魚缸刷');
-            return;
-        }
-        const ok = await this.confirmDialogManager.ask('確定要使用魚缸刷嗎？');
-        if (!ok) return;
-        await this.useBrush();
-    }
-
-    /** 真正執行魚缸刷 */
-    private async useBrush() {
-        const items = this.playerData.inventory.items;
-
-        if (items.brush <= 0) {
-            showFloatingTextCenter(this.floatingNode, '魚缸刷不足');
-            return;
-        }
-        items.brush -= 1;
-        TankEnvironmentManager.cleanWater(this.playerData);
-
-        await DataManager.savePlayerDataWithCache(this.playerData);
-        await this.refreshEnvironmentUI();
-        showFloatingTextCenter(this.floatingNode, '已清潔魚缸');
-    }
-
-    private updateEnvironmentOverlays(env: any) {
-        // 墓地魚缸不顯示遮罩
-        if (this.tombTankNode && this.tombTankNode.active) {
-            if (this.dirtyWaterOverlay) this.dirtyWaterOverlay.active = false;
-            if (this.coldOverlay) this.coldOverlay.active = false;
-            if (this.hotOverlay) this.hotOverlay.active = false;
-            return;
-        }
-
-        const isDirty = env.waterQualityStatus !== 'clean';
-        const tooCold = env.temperature < this.minComfortTemp;
-        const tooHot = env.temperature > this.maxComfortTemp;
-
-        if (this.dirtyWaterOverlay) this.dirtyWaterOverlay.active = isDirty;
-        if (this.coldOverlay) this.coldOverlay.active = !isDirty && tooCold; // 髒水優先
-        if (this.hotOverlay) this.hotOverlay.active = !isDirty && tooHot;  // 髒水優先
-    }
-
-    private async setHeaderUser(displayName: string, userId: string, picture?: string) {
-        this.userNameLabel.string = displayName || "未命名";
-        this.userIdLabel.string = userId || "";
-
-        if (picture) {
-            await this.loadAvatar(picture);
+    private onClickTankButton(index: number) {
+        if (this.isViewingFriend && this.viewingFriend) {
+            this.renderFriendTankByIndex(index);
         } else {
-            this.userAvatar.spriteFrame = this.defaultAvatar;
+            this.switchTank(index + 1);
         }
     }
-
 }

@@ -36,7 +36,8 @@ export interface FishData {
     emotion: "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "dead" | "sick";  // 情緒狀態
     isDead: boolean;                     // 是否死了
     deathDate?: string;                  // 死掉時間
-    tankId: number;                      // 所在魚缸
+    tankId: number;                      // 所在魚缸          
+    adultForm?: "form1"|"form2"|"form3"|"form4"|"form5"|"form6"|"form7";           // 成魚(第六階)形態
 }
 
 /** 魚缸環境狀態 */
@@ -52,11 +53,12 @@ export interface TankEnvironment {
 
 /** 魚缸 */
 export interface TankData {
-    id: number;             // 魚缸 ID
-    name: string;           // 魚缸名稱
-    comfort: number;        // 舒適度（0~100 暫定）
-    fishIds: number[];      // 此魚缸內的魚 ID 陣列
-    backgroundId?: string;  // 背景樣式，例如 'bg_coral_01'
+    id: number;               // 魚缸 ID
+    name: string;             // 魚缸名稱
+    capacity?: number;        // 魚缸容量  
+    comfort: number;          // 舒適度（0~100 暫定）
+    fishIds: number[];        // 此魚缸內的魚 ID 陣列
+    backgroundId?: string;    // 背景樣式，例如 'bg_coral_01'
     decorations?: Array<{
         id: string;           // 裝飾資產 id，例如 'deco_shell_02'
         x: number;            // 位置（以 UITransform 左上為原點或中心，固定一種）
