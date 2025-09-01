@@ -72,7 +72,8 @@ export interface TankData {
 
 /** 玩家資料 */
 export interface PlayerData {
-    userId: string;                    // 玩家 ID
+    userId: string;                    // 玩家 ID (LINE)
+    gameId: string;                    // 玩家 ID (遊戲中用的)
     displayName: string;               // 玩家名稱
     picture: string;                   // 玩家頭貼
     dragonBones: number;               // 遊戲貨幣（龍骨）
@@ -126,6 +127,7 @@ export interface QuizQuestion {
 /** 好友資料 */
 export interface FriendSummary {
     userId: string;
+    gameId: string;
     displayName?: string;
     picture?: string;
 }
@@ -339,6 +341,7 @@ export class DataManager {
     static async sendFriendRequest(friendId: string): Promise<{ request: FriendRequest }> {
         const id = this.currentUserId;
         if (!id) throw new Error('no current user');
+        if (!friendId) throw new Error('no friendId'); 
         const res = await fetch(`${this.apiBase}/friend-requests`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -403,7 +406,7 @@ export class DataManager {
     }
 
     /** 查詢使用者公開資料 */
-    static async lookupUserById(userId: string): Promise<{ userId: string, displayName?: string, picture?: string } | null> {
+    static async lookupUserById(userId: string): Promise<{ userId: string, gameId?: string, displayName?: string, picture?: string } | null> {
         const id = (userId || '').trim();
         if (!id) return null;
         try {
@@ -411,7 +414,7 @@ export class DataManager {
             if (res.status === 404) return null;
             if (!res.ok) throw new Error(`lookupUserById failed: ${res.status}`);
             const doc = await res.json();
-            return { userId: doc.userId, displayName: doc.displayName, picture: doc.picture };
+            return { userId: doc.userId, gameId: doc.gameId, displayName: doc.displayName, picture: doc.picture };
         } catch (e) {
             console.warn('[lookupUserById] failed:', e);
             throw e;

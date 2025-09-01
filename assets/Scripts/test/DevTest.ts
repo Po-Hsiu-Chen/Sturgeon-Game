@@ -40,23 +40,6 @@ export class DevTest extends Component {
         console.log(`魚 ${fish.name} 飢餓設為 100，將於下次啟動自動死亡`);
     }
 
-    /** 印出目前魚的簡要摘要 */
-    async onPrintSummary() {
-        await DataManager.ready?.catch(()=>{});
-        const data = await DataManager.getPlayerDataCached();
-        if (!data) {
-            console.warn("尚未建立任何玩家資料");
-            return;
-        }
-
-        const total = data.fishList.length;
-        const dead = data.fishList.filter(f => f.isDead).length;
-
-        console.log(`玩家ID: ${data.userId}`);
-        console.log(`魚數量: ${total}`);
-        console.log(`死魚: ${dead}`);
-    }
-
     /** 將全形數字/符號轉半形 */
     private toHalfWidth(s: string) {
         // 全形轉半形（含數字、小數點、負號等常見字元）

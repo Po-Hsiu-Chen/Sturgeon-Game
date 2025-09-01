@@ -40,6 +40,10 @@ async function initDB() {
   await friendRequests.createIndex({ toUserId: 1, status: 1, createdAt: -1 });
   await friendRequests.createIndex({ fromUserId: 1, status: 1, createdAt: -1 });
   await mails.createIndex({ userId: 1, status: 1, createdAt: -1 });
+  await users.createIndex(
+    { gameId: 1 },
+    { unique: true, partialFilterExpression: { gameId: { $type: "string" } } }
+  );
 
   console.log('MongoDB 連線成功');
 }
@@ -70,8 +74,17 @@ function getWeekStartKey(date = new Date(), tzOffsetMinutes = 480) {
   return d.toISOString().slice(0, 10); // "YYYY-MM-DD"
 }
 
+/** 產生數字 gameId */
+async function generateGameId() {
+  let id;
+  do {
+    id = String(Math.floor(100000 + Math.random() * 900000)); // 六位數「數字字串」
+  } while (await users.findOne({ gameId: id }));
+  return id;
+}
+
 /** 建立新玩家的預設資料 */
-function buildDefaultPlayer(userId, displayName, picture) {
+async function buildDefaultPlayer(userId, displayName, picture) {
   const now = new Date();
   const today = now.toISOString().split('T')[0];
 
@@ -101,6 +114,7 @@ function buildDefaultPlayer(userId, displayName, picture) {
   // 回傳預設玩家資料
   return {
     userId,
+    gameId: await generateGameId(),
     displayName,
     picture,
     dragonBones: 666,
@@ -155,10 +169,19 @@ function buildDefaultPlayer(userId, displayName, picture) {
 /** 取得玩家資料 */
 app.get('/player/:userId', async (req, res) => {
   const id = req.params.userId?.trim();
-  const user = await users.findOne({ userId: id });
+  let user = await users.findOne({ userId: id });
   if (!user) return res.status(404).json({ error: 'not found' });
+
+  // 若缺少 gameId，自動補（避免前端顯示空白）
+  if (!user.gameId) {
+    const newId = await generateGameId();
+    await users.updateOne({ userId: id }, { $set: { gameId: newId } });
+    user = await users.findOne({ userId: id });
+  }
+
   res.json(user);
 });
+
 
 /** 新增玩家 */
 app.post('/player', async (req, res) => {
@@ -237,13 +260,17 @@ app.post('/auth/line', async (req, res) => {
     const isNew = !user;
 
     if (!user) {
-      const newPlayer = buildDefaultPlayer(lineUserId, displayName, picture);
+      const newPlayer = await buildDefaultPlayer(lineUserId, displayName, picture);
       await users.insertOne(newPlayer);
       user = newPlayer;
     } else {
-      // 舊的「空殼」文件 → 補齊缺欄位（不覆蓋原本已有值）
-      const base = buildDefaultPlayer(lineUserId, displayName, picture);
+      // 新人
+      const newPlayer = await buildDefaultPlayer(lineUserId, displayName, picture);
+
+      // 舊人補字段
+      const base = await buildDefaultPlayer(lineUserId, displayName, picture);
       const $set = {};
+      if (!user.gameId) $set.gameId = await generateGameId();
 
       if (user.dragonBones == null) $set.dragonBones = base.dragonBones;
       if (!user.lastLoginDate) $set.lastLoginDate = base.lastLoginDate;
@@ -266,7 +293,7 @@ app.post('/auth/line', async (req, res) => {
       }
     }
 
-    res.json({ lineUserId, displayName, picture, isNew, user });
+    res.json({ lineUserId, gameId: user.gameId, displayName, picture, isNew, user });
 
   } catch (e) {
     console.error('auth/line 例外：', e);
@@ -282,7 +309,7 @@ app.get('/friends/:userId', async (req, res) => {
   if (!user) return res.status(404).json({ error: '找不到玩家' });
 
   const friendList = await users.find({ userId: { $in: user.friends || [] } })
-    .project({ userId: 1, displayName: 1, picture: 1, _id: 0 })
+    .project({ _id: 0, userId: 1, gameId: 1, displayName: 1, picture: 1 })
     .toArray();
 
   res.json(friendList);
@@ -292,11 +319,12 @@ app.get('/friends/:userId', async (req, res) => {
 app.get('/public/player/:userId', async (req, res) => {
   const id = req.params.userId?.trim();
   const doc = await users.findOne(
-    { userId: id },
+    { $or: [{ userId: id }, { gameId: id }] },
     {
       projection: {
         _id: 0,
         userId: 1,
+        gameId: 1,
         displayName: 1,
         picture: 1,
         tankEnvironment: 1,
@@ -346,6 +374,7 @@ app.get('/public/player/:userId', async (req, res) => {
 
   res.json({
     userId: doc.userId,
+    gameId: doc.gameId,
     displayName: doc.displayName,
     picture: doc.picture,
     tankEnvironment: doc.tankEnvironment,
@@ -467,6 +496,7 @@ app.get('/friend-requests', async (req, res) => {
 /** 回覆好友邀請（接受 / 拒絕 / 取消） */
 app.post('/friend-requests/respond', async (req, res) => {
   const { userId, requestId, action } = req.body || {};
+  console.log('[POST /friend-requests] body =', req.body);
   if (!userId || !requestId || !action) return res.status(400).json({ error: 'invalid_params' });
 
   const fr = await friendRequests.findOne({ requestId });
@@ -584,7 +614,7 @@ app.get('/recommend-users', async (req, res) => {
     const pipeline = [
       { $match: { userId: { $nin: excludeIds } } },
       { $sample: { size: count } },
-      { $project: { _id: 0, userId: 1, displayName: 1, picture: 1 } }
+      { $project: { _id: 0, userId: 1, gameId: 1, displayName: 1, picture: 1 } }
     ];
 
     const usersList = await users.aggregate(pipeline).toArray();
@@ -630,7 +660,7 @@ app.post('/dev/create/:userId', async (req, res) => {
     const exists = await users.findOne({ userId });
     if (exists) return res.json({ ok: true, user: exists, existed: true });
 
-    const player = buildDefaultPlayer(`${userId}_id`, `${userId}`, '');
+    const player = await buildDefaultPlayer(userId, userId, '');
     await users.insertOne(player);
     const fresh = await users.findOne({ userId });
     res.json({ ok: true, user: fresh, existed: false });

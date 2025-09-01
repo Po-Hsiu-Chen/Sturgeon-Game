@@ -45,7 +45,7 @@ export class GameManager extends Component {
 
     // 顯示玩家資料
     @property(Label) userNameLabel: Label = null!;              // 龍骨數量
-    @property(Label) userIdLabel: Label = null!;                // 使用者ID
+    @property(Label) gameIdLabel: Label = null!;                // 使用者ID
     @property(Sprite) userAvatar: Sprite = null!;               // 使用者頭貼
     @property(SpriteFrame) defaultAvatar: SpriteFrame = null!;  // 預設頭貼
     @property(Label) dragonboneLabel: Label = null!;            // 龍骨數量
@@ -174,7 +174,7 @@ export class GameManager extends Component {
 
         // 顯示玩家資訊
         this.userNameLabel.string = this.playerData.displayName || "未命名";
-        this.userIdLabel.string = this.playerData.userId || "";
+        this.gameIdLabel.string = `ID: ${this.playerData.gameId || this.playerData.userId || ""}`;
         if (this.playerData.picture) {
             this.loadAvatar(this.playerData.picture);
         } else {
@@ -209,9 +209,9 @@ export class GameManager extends Component {
         }
     }
 
-    private async setHeaderUser(displayName: string, userId: string, picture?: string) {
+    private async setHeaderUser(displayName: string, gameId: string, picture?: string) {
         this.userNameLabel.string = displayName || "未命名";
-        this.userIdLabel.string = userId || "";
+        this.gameIdLabel.string = gameId || "";
 
         if (picture) {
             await this.loadAvatar(picture);
@@ -398,8 +398,12 @@ export class GameManager extends Component {
         this.activeTankViewport.active = true;  // 顯示主視圖
         this.tombTankNode.active = false;       // 關閉墓園
 
-        // 換回自己的頭像／名字／ID、隱藏返回鈕
-        await this.setHeaderUser(this.playerData.displayName, this.playerData.userId, this.playerData.picture);
+        // 換回自己的名字/ID/頭像、隱藏返回鈕
+        await this.setHeaderUser(
+            this.playerData.displayName,
+            this.playerData.gameId || this.playerData.userId,
+            this.playerData.picture
+        );
         if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = false;
 
         this.currentTankId = tankId;
@@ -427,7 +431,12 @@ export class GameManager extends Component {
         if (!firstTank) { showFloatingTextCenter(this.floatingNode, '這位好友還沒有魚缸'); return; }
 
         // 換成朋友頭像／名字／ID、顯示返回鈕
-        this.setHeaderUser(friend.displayName || friend.userId, friend.userId, (friend as any).picture);
+        this.setHeaderUser(
+            (friend as any).displayName || (friend as any).gameId || friend.userId,
+            (friend as any).gameId || friend.userId,
+            (friend as any).picture
+        );
+
         if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = true;
 
         // 隱藏墓地按鈕、遮蔽金錢
@@ -466,7 +475,7 @@ export class GameManager extends Component {
             this.waterQualityLabel.color = (env.waterQualityStatus === 'clean') ? GREEN : RED;
         }
 
-        showFloatingTextCenter(this.floatingNode, `${friend.displayName || friend.userId} 的魚缸`);
+        showFloatingTextCenter(this.floatingNode, `${friend.displayName || (friend as any).gameId || friend.userId} 的魚缸`);
     }
 
     private renderFriendTankByIndex(idx: number) {

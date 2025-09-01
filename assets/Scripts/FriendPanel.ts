@@ -140,7 +140,7 @@ export class FriendPanel extends Component {
 
                 if (nameLabel) nameLabel.string = f.displayName || '(未設定暱稱)';
                 const idLabel = row.getChildByName('IdLabel')?.getComponent(Label);
-                if (idLabel) idLabel.string = f.userId;
+                if (idLabel) idLabel.string = `ID: ${this.getDisplayId(f as any)}`;
 
                 const avatarMask = row.getChildByName('UserAvatarMask');
                 const avatarSprite = avatarMask?.getChildByName('UserAvatar')?.getComponent(Sprite);
@@ -189,7 +189,7 @@ export class FriendPanel extends Component {
                 if (nameLabel) nameLabel.string = user.displayName || '(未設定暱稱)';
 
                 const idLabel = row.getChildByName('IdLabel')?.getComponent(Label);
-                if (idLabel) idLabel.string = user.userId;
+                if (idLabel) idLabel.string = `ID: ${this.getDisplayId(user as any)}`;
 
                 const avatarMask = row.getChildByName('UserAvatarMask');
                 const avatarSprite = avatarMask?.getChildByName('UserAvatar')?.getComponent(Sprite);
@@ -255,7 +255,7 @@ export class FriendPanel extends Component {
             const nameLabel = row.getChildByName('NameLabel')?.getComponent(Label);
             if (nameLabel) nameLabel.string = user.displayName || '(未設定暱稱)';
             const idLabel = row.getChildByName('IdLabel')?.getComponent(Label);
-            if (idLabel) idLabel.string = user.userId;
+            if (idLabel) idLabel.string = `ID: ${this.getDisplayId(user as any)}`;
 
             const avatarMask = row.getChildByName('UserAvatarMask');
             const avatarSprite = avatarMask?.getChildByName('UserAvatar')?.getComponent(Sprite);
@@ -359,13 +359,17 @@ export class FriendPanel extends Component {
     }
 
     /** 統一設定邀請按鈕狀態與事件 */
-    private setupInviteButton(inviteBtn: Button, userId: string, friends: Array<{ userId: string }>, reqs: { incoming: any[], outgoing: any[] }) {
-        // 先清除舊的事件監聽（避免之前狀態殘留）
+    private setupInviteButton(inviteBtn: Button,
+        targetUserId: string,
+        friends: Array<{ userId: string }>,
+        reqs: { incoming: any[], outgoing: any[] }
+    ) {
+        // 先清監聽
         inviteBtn.node.off(Button.EventType.CLICK);
 
-        const isFriend = friends?.some(f => f.userId === userId);
-        const hasOutgoingPending = reqs?.outgoing?.some(r => r.toUserId === userId && r.status === 'pending');
-        const hasIncomingPending = reqs?.incoming?.some(r => r.fromUserId === userId && r.status === 'pending');
+        const isFriend = friends?.some(f => f.userId === targetUserId);
+        const hasOutgoingPending = reqs?.outgoing?.some(r => r.toUserId === targetUserId && r.status === 'pending');
+        const hasIncomingPending = reqs?.incoming?.some(r => r.fromUserId === targetUserId && r.status === 'pending');
 
         if ((friends?.length) >= DataManager.FRIEND_LIMIT) {
             this.setInviteBtn(inviteBtn, '好友已滿', false);
@@ -376,19 +380,18 @@ export class FriendPanel extends Component {
         } else if (hasIncomingPending) {
             this.setInviteBtn(inviteBtn, '對方已邀請你', false);
         } else {
-            // 可送出邀請
             this.setInviteBtn(inviteBtn, '送出邀請', true);
 
             inviteBtn.node.on(Button.EventType.CLICK, async () => {
                 try {
                     this.setInviteBtn(inviteBtn, '送出中…', false);
-                    const resp = await DataManager.sendFriendRequest(userId);
+                    const resp = await DataManager.sendFriendRequest(targetUserId);
 
-                    // 即時更新 reqs 避免刷新前仍顯示可送出
+                    // 立刻把本地 pending 狀態補上，鍵名用 userId
                     reqs.outgoing.push({
                         requestId: resp.request.requestId,
                         fromUserId: DataManager.currentUserId!,
-                        toUserId: userId,
+                        toUserId: targetUserId,
                         createdAt: new Date().toISOString(),
                         status: 'pending'
                     });
@@ -404,7 +407,6 @@ export class FriendPanel extends Component {
                     this.node.emit('refresh-mail-badge');
                 } catch (e) {
                     console.warn('sendFriendRequest failed:', e);
-                    // 辨識後端上限錯誤碼，改成好友已滿並禁用 
                     const code = (e as any)?.code;
                     if (code === 'friend_limit_reached' || code === 'friend_limit_reached_sender' || code === 'friend_limit_reached_recipient') {
                         this.setInviteBtn(inviteBtn, '好友已滿', false);
@@ -435,6 +437,10 @@ export class FriendPanel extends Component {
             showFloatingTextCenter(this.floatingNode, '刪除失敗，請稍後再試');
             if (deleteBtn) deleteBtn.interactable = true;
         }
+    }
+
+    private getDisplayId(u: { gameId?: string; userId: string }): string {
+        return (u.gameId && String(u.gameId)) || u.userId;
     }
 
 }
