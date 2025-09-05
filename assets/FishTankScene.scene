@@ -198,6 +198,10 @@
     ],
     "maleStage6FormPrefabs": [
       {
+        "__uuid__": "2eb4cbd1-a031-464a-8bc1-e082eae995e0",
+        "__expectedType__": "cc.Prefab"
+      },
+      {
         "__uuid__": "54da145f-a9e3-4700-affb-7b1d4d45bd79",
         "__expectedType__": "cc.Prefab"
       },
@@ -211,6 +215,10 @@
       }
     ],
     "femaleStage6FormPrefabs": [
+      {
+        "__uuid__": "4b8d7d81-f118-45b0-91f2-bfe6395472cc",
+        "__expectedType__": "cc.Prefab"
+      },
       {
         "__uuid__": "fd500111-368e-471c-a249-b8b3bd1b2f50",
         "__expectedType__": "cc.Prefab"

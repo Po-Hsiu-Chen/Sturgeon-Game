@@ -95,24 +95,18 @@ export class GameManager extends Component {
 
     // 第六階成魚型態的順序（要和 Inspector 中兩個 Prefab 陣列順序完全一致）
     private readonly ADULT_FORM_ORDER: FishData["adultForm"][] = [
-        "form1", // 大眼魚
-        "form2", // 胖鯉魚
-        "form3", // 戴眼鏡魚
-        "form4", // 獨角魚
-        "form5", // 鬍鬚魚
-        "form6", // 黃肚魚
-        "form7", // 骨頭魚
+        "form1", // Normal
+        "form2", // 大眼魚
+        "form3", // 胖鯉魚
+        "form4" // 骨頭魚
     ];
 
     private getAdultFormDisplayName(form?: FishData["adultForm"]): string {
         const map: Record<string, string> = {
-            form1: "大眼魚",
-            form2: "胖鯉魚",
-            form3: "戴眼鏡魚",
-            form4: "獨角魚",
-            form5: "鬍鬚魚",
-            form6: "黃肚魚",
-            form7: "骨頭魚",
+            form1: "Normal",
+            form2: "大眼魚",
+            form3: "胖鯉魚",
+            form4: "骨頭魚"
         };
         return form ? (map[form] ?? "未知型態") : "未知型態";
     }
@@ -1053,7 +1047,7 @@ export class GameManager extends Component {
     }
 
 
-    /** 若只有第一缸，且第一缸3隻都≥3階 → 將第一缸 capacity 從3升到5 */
+    /** 若只有第一缸，且第一缸3隻都≥3階 → 將第一缸 capacity 從3升到6 */
     private async checkAndUnlockCapacityForFirstTank() {
         if (!this.playerData) return;
         if (this.playerData.tankList.length !== 1) return; // 只在「只有第一缸」時有效
@@ -1061,15 +1055,15 @@ export class GameManager extends Component {
         const tank1 = this.playerData.tankList.find(t => t.id === 1);
         if (!tank1) return;
 
-        if ((tank1.capacity ?? 3) >= 5) return; // 已經5就不用動
+        if ((tank1.capacity ?? 3) >= 6) return; // 已經6就不用動
 
         // 至少有 3 隻達標
         const fish = this.getAliveFishInTank(1);
         const countGte3 = fish.filter(f => (f.stage ?? 1) >= 3).length;
-        if ((tank1.capacity ?? 3) < 5 && countGte3 >= 3) {
-            tank1.capacity = 5;
+        if ((tank1.capacity ?? 3) < 6 && countGte3 >= 3) {
+            tank1.capacity = 6;
             await DataManager.savePlayerDataWithCache(this.playerData);
-            showFloatingTextCenter(this.floatingNode, "第一缸容量解鎖：3 → 5！");
+            showFloatingTextCenter(this.floatingNode, "第一缸容量解鎖：3 → 6！");
         }
 
     }
@@ -1083,20 +1077,20 @@ export class GameManager extends Component {
         const tank = this.playerData.tankList.find(t => t.id === tankId);
         if (!tank) return;
 
-        // 需要「該缸容量至少是5」且「有5隻活魚」且「全部≥6階」
+        // 需要「該缸容量至少是6」且「有6隻活魚」且「全部≥6階」
         const fish = this.getAliveFishInTank(tankId);
-        if ((tank.capacity ?? (tankId === 1 ? 3 : 5)) < 5) return;
-        if (fish.length < 5) return;
+        if ((tank.capacity ?? (tankId === 1 ? 3 : 6)) < 6) return;
+        if (fish.length < 6) return;
         if (!fish.every(f => (f.stage ?? 1) >= 6)) return;
 
-        // 開新缸（id=現在已有缸數+1），capacity=5
+        // 開新缸（id=現在已有缸數+1），capacity=6
         const newTankId = this.playerData.tankList.length + 1;
         this.playerData.tankList.push({
             id: newTankId,
             name: `魚缸 ${newTankId}`,
             comfort: 100,
             fishIds: [],
-            capacity: 5
+            capacity: 6
         });
         await DataManager.savePlayerDataWithCache(this.playerData);
         showFloatingTextCenter(this.floatingNode, `成功開啟第 ${newTankId} 缸！`);
@@ -1159,7 +1153,7 @@ export class GameManager extends Component {
         const tank = this.playerData.tankList.find(t => t.id === tankId);
         if (!tank) return { ok: false, msg: '找不到此魚缸' };
 
-        const cap = tank.capacity ?? (tank.id === 1 ? 3 : 5);
+        const cap = tank.capacity ?? (tank.id === 1 ? 3 : 6);
         const alive = this.getAliveFishInTank(tankId).length;
         if (alive >= cap) return { ok: false, msg: '已達魚缸上限' };
 
@@ -1193,12 +1187,12 @@ export class GameManager extends Component {
 
         // 組確認訊息
         const tank = this.playerData!.tankList.find(t => t.id === tankId)!;
-        const cap = tank.capacity ?? (tank.id === 1 ? 3 : 5);
+        const cap = tank.capacity ?? (tank.id === 1 ? 3 : 6);
         const alive = this.getAliveFishInTank(tankId).length;
         const cost = this.getDirectAddCost();
         const bones = this.playerData!.dragonBones ?? 0;
         const msg = (cost === 0)
-            ? `要把一隻小魚請回家嗎？（免費）\n目前：${alive} / ${cap}`
+            ? `要多邀請一隻小魚回家嗎？（免費）\n目前：${alive} / ${cap}`
             : `要花 ${cost} 龍骨收編一隻小魚嗎？\n目前：${alive} / ${cap}\n你有：${bones} 龍骨`;
 
         const ok = await this.confirmDialogManager.ask(msg);
@@ -1214,7 +1208,7 @@ export class GameManager extends Component {
         if (!tank) return;
 
         const aliveFish = this.getAliveFishInTank(this.currentTankId).length;
-        const capacity = tank.capacity ?? (tank.id === 1 ? 3 : 5);
+        const capacity = tank.capacity ?? (tank.id === 1 ? 3 : 6);
 
         if (this.tankFishCountLabel) {
             this.tankFishCountLabel.string = `${aliveFish} / ${capacity}`;

@@ -12,7 +12,7 @@ const { ccclass, property } = _decorator;
 export class FishDetailManager extends Component {
     @property(ConfirmDialogManager) confirmDialogManager: ConfirmDialogManager = null!;
     @property(Node) floatingNode: Node = null!;
-    
+
     @property(Node) fishDetailPanel: Node = null!;
 
     // Title and InfoSection
@@ -112,6 +112,7 @@ export class FishDetailManager extends Component {
         this.genderPotionBtn.on(Node.EventType.TOUCH_END, this.onUseGenderPotion, this);
         this.upgradePotionBtn.on(Node.EventType.TOUCH_END, this.onUseUpgradePotion, this);
         this.coldMedicineBtn.on(Node.EventType.TOUCH_END, this.onUseColdMedicine, this);
+        this.changePotionBtn.on(Node.EventType.TOUCH_END, this.onUseChangePotion, this);
     }
 
     /** 顯示魚詳細資訊（opts.readOnly: 朋友魚唯讀） */
@@ -160,6 +161,7 @@ export class FishDetailManager extends Component {
         this.genderPotionBtn.off(Node.EventType.TOUCH_END);
         this.upgradePotionBtn.off(Node.EventType.TOUCH_END);
         this.coldMedicineBtn.off(Node.EventType.TOUCH_END);
+        this.changePotionBtn.off(Node.EventType.TOUCH_END);
 
         // 只有「非唯讀」才綁定事件
         if (!isReadOnly) {
@@ -168,6 +170,7 @@ export class FishDetailManager extends Component {
             this.genderPotionBtn.on(Node.EventType.TOUCH_END, this.onUseGenderPotion, this);
             this.upgradePotionBtn.on(Node.EventType.TOUCH_END, this.onUseUpgradePotion, this);
             this.coldMedicineBtn.on(Node.EventType.TOUCH_END, this.onUseColdMedicine, this);
+            this.changePotionBtn.on(Node.EventType.TOUCH_END, this.onUseChangePotion, this);
         }
 
         // 鎖定互動
@@ -176,6 +179,7 @@ export class FishDetailManager extends Component {
         this.genderPotionBtn.getComponent(Button)!.interactable = !isReadOnly;
         this.upgradePotionBtn.getComponent(Button)!.interactable = !isReadOnly;
         this.coldMedicineBtn.getComponent(Button)!.interactable = !isReadOnly;
+        this.changePotionBtn.getComponent(Button)!.interactable = !isReadOnly;
         this.renameButton.getComponent(Button)!.interactable = !isReadOnly;
 
         // 情緒圖 (優先使用 SwimmingFish 傳來的 sprite)
@@ -372,6 +376,47 @@ export class FishDetailManager extends Component {
             }
             this.showFloatingTextRightOf(this.fishStatusImage.node, '已治癒！');
             await this.showFishDetail(fish);
+        }
+    }
+
+    /** 道具使用：整形藥 */
+    onUseChangePotion() {
+        this.getCurrentFishAndPlayer().then(async ({ playerData, fish }) => {
+            if (!playerData || !fish) return;
+
+            // 先檢查階段
+            if (fish.stage < 6) {
+                showFloatingTextCenter(this.floatingNode, '需要達到第 6 階才能使用整形藥');
+                return;
+            }
+
+            // 再檢查數量
+            if (playerData.inventory.items.changePotion <= 0) {
+                showFloatingTextCenter(this.floatingNode, '沒有整形藥了');
+                return;
+            }
+
+            // 確認使用
+            const ok = await this.confirmDialogManager.ask('確定要使用整形藥嗎？');
+            if (!ok) return;
+
+            await this.useChangePotion();
+        })
+    }
+
+    private async useChangePotion() {
+        const playerData = await DataManager.getPlayerDataCached();
+        const fish = playerData.fishList.find(f => f.id === this.currentFishId);
+        if (!fish) return;
+
+        const msg = FishLogic.useChangePotion(fish, playerData.inventory.items);
+        await DataManager.savePlayerDataWithCache(playerData);
+        console.log(msg);
+        this.showFishDetail(fish); // 更新畫面
+
+        const gameManager = this.node.scene.getComponentInChildren(GameManager);
+        if (gameManager) {
+            gameManager.replaceFishNode(fish);  // 根據新長相產生對應 prefab
         }
     }
 

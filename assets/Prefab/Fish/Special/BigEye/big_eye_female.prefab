@@ -1,7 +1,7 @@
 [
   {
     "__type__": "cc.Prefab",
-    "_name": "big_eye_female(temp)",
+    "_name": "big_eye_female",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_native": "",
@@ -13,7 +13,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "big_eye_female(temp)",
+    "_name": "big_eye_female",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": null,
@@ -170,13 +170,13 @@
     "_dstBlendFactor": 4,
     "_color": {
       "__type__": "cc.Color",
-      "r": 202,
-      "g": 107,
+      "r": 255,
+      "g": 255,
       "b": 255,
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "ce4817c2-02a2-4301-a0c4-67c1408ee72b@f9941",
+      "__uuid__": "79e82e57-658d-4b11-958e-920d08b51c3e@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 0,
@@ -306,13 +306,13 @@
     "_dstBlendFactor": 4,
     "_color": {
       "__type__": "cc.Color",
-      "r": 202,
-      "g": 107,
+      "r": 255,
+      "g": 255,
       "b": 255,
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "7c38a0e3-f517-458c-acfa-d84261f77fa3@f9941",
+      "__uuid__": "d47cf35c-0c59-417f-8615-6eb3fc54afe0@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 0,
@@ -442,13 +442,13 @@
     "_dstBlendFactor": 4,
     "_color": {
       "__type__": "cc.Color",
-      "r": 202,
-      "g": 107,
+      "r": 255,
+      "g": 255,
       "b": 255,
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "52e68a1b-7cee-4912-8c08-74e7a9525600@f9941",
+      "__uuid__": "0ccb8e97-edd3-465f-aed1-182a1c762d2c@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 0,

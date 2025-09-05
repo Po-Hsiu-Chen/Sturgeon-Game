@@ -77,6 +77,42 @@ export class FishLogic {
 
         return { message: `${fish.name} 已治癒`, cured: true };
     }
+    static useChangePotion(fish: any, items: any): string {
+        if (items.changePotion <= 0) {
+            return "沒有整形藥了";
+        }
+        if (fish.isDead) {
+            return "魚已死亡，不能整形";
+        }
+
+        // 使用整形藥
+        items.changePotion--;
+
+        const originalForm = fish.adultForm;
+
+        // 隨機選擇一個新的型態（避免和原本的型態一樣）
+        const availableForms = ["form1", "form2", "form3", "form4"];
+        const newForm = this.getRandomForm(availableForms, originalForm);
+        
+        fish.adultForm = newForm;
+
+        return `${fish.name} 的魚型態已從 ${originalForm} 變更為 ${fish.adultForm}`;
+    }
+
+    // 隨機選擇新的型態，保證不和原型態相同
+    static getRandomForm(availableForms: string[], originalForm: string): string {
+        let newForm: string;
+
+        do {
+            // 隨機選擇一個型態
+            const randomIndex = Math.floor(Math.random() * availableForms.length);
+            newForm = availableForms[randomIndex];
+        } while (newForm === originalForm);  // 保證選擇的型態不等於原型態
+
+        return newForm;
+    }
+
+
 
     static tryStageUpgradeByGrowthDays(fish: any): boolean {
         const thresholds: Record<number, number> = {
