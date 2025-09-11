@@ -1,150 +1,176 @@
-import { _decorator, Component, Vec3, Node, find, UITransform, Sprite, SpriteFrame, Prefab, tween, Label } from 'cc';
+import { _decorator, Component, Vec3, Node, find, UITransform, Sprite, SpriteFrame, tween } from 'cc';
 import { FishDetailManager } from './FishDetailManager';
-import { type FishData } from './DataManager';
+import { DataManager, type FishData } from './DataManager';
+
 const { ccclass, property } = _decorator;
+
+type EmotionKey = "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "sick";
 
 @ccclass('SwimmingFish')
 export class SwimmingFish extends Component {
+    // -------------------- 外觀 / 時裝 --------------------
+    @property(Node) hatAnchor: Node = null!;                 // 頭飾掛點（在魚 prefab 上）
+    @property([SpriteFrame]) hatFrames: SpriteFrame[] = [];  // 頭飾圖片：依序 bowtie, chefhat, fedora, sunglass
+    private hatNode: Node | null = null;                     // 由程式動態建立的頭飾節點
 
-    // 與魚資料相關的屬性
-    public fishData: FishData = null!;                       // 魚的資料（從 GameManager 傳入）
-    static currentSelectedFish: SwimmingFish | null = null;  // 目前被選中的魚
+    // -------------------- 資料 / 互動屬性 --------------------
+    public fishData: FishData = null!;                       // 此節點對應的魚資料
+    static currentSelectedFish: SwimmingFish | null = null;  // 目前打開泡泡的那一條魚
 
-    // 互動/唯讀 與 表情用環境 
     @property
-    public interactive: boolean = true;      // 朋友魚 => false
-    private _envForEmotion: any = null;      // 用來算情緒的環境（自己 or 朋友的環境）
+    public interactive: boolean = true;                      // 是否允許互動（朋友魚缸可設為 false）
+    private _envForEmotion: any = null;                      // 計算情緒時使用的環境（自己的缸 or 朋友的缸）
 
-    // Movement 
-    private isMovingRight = false;   // 目前是否朝右移動
-    private speed = 80;              // 移動速度
-    private fishAreaWorldLeft = 0;   // 可移動區域 - 左邊界
-    private fishAreaWorldRight = 0;  // 可移動區域 - 右邊界
+    // -------------------- 移動參數 --------------------
+    private isMovingRight = false;
+    private readonly speed = 80;
+    private fishAreaWorldLeft = 0;
+    private fishAreaWorldRight = 0;
 
-    // Emotion
-    private emotionBubble: Node | null = null; // 泡泡（包含放大鏡按鈕）
-    private emotionSprite: Sprite | null = null;
+    // -------------------- 情緒顯示（泡泡） --------------------
+    private emotionBubble: Node | null = null;   // 泡泡根節點（含放大鏡按鈕）
+    private emotionSprite: Sprite | null = null; // 泡泡內真正顯示表情的 Sprite
+
+    // 全域情緒貼圖註冊
     private static _emotionFrames: Record<string, SpriteFrame> = {};
-    static setEmotionFrames(map: Record<string, SpriteFrame>) {
-        this._emotionFrames = map || {};
-    }
-    static getEmotionSpriteByKey(key: "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "sick"): SpriteFrame | null {
+    static setEmotionFrames(map: Record<string, SpriteFrame>) { this._emotionFrames = map || {}; }
+    static getEmotionSpriteByKey(key: EmotionKey): SpriteFrame | null {
         return this._emotionFrames[key] ?? this._emotionFrames["happy"] ?? null;
     }
 
-    // Emotion Cache
-    private _lastEmotion: "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "sick" | null = null;
+    // 快取最近一次計算結果（減少重算／維持視覺一致）
+    private _lastEmotion: EmotionKey | null = null;
     private _lastEmotionSprite: SpriteFrame | null = null;
 
-    start() {
-        // 取得父節點（FishArea）範圍
+    /** 初始化 */
+    start(): void {
+        // 取得可移動區域（父層 FishArea）的世界座標邊界
         const fishArea = this.node.parent;
-        const fishAreaTransform = fishArea.getComponent(UITransform);
+        const fishAreaTransform = fishArea?.getComponent(UITransform);
+        if (!fishAreaTransform) {
+            console.warn('[SwimmingFish] FishArea 缺少 UITransform，無法計算移動範圍');
+            return;
+        }
         const areaWorldPos = fishArea.getWorldPosition();
         const halfWidth = fishAreaTransform.width / 2;
-
-        // 魚游動相關
-        this.fishAreaWorldLeft = areaWorldPos.x - halfWidth + 50; // 邊界
+        this.fishAreaWorldLeft = areaWorldPos.x - halfWidth + 50;
         this.fishAreaWorldRight = areaWorldPos.x + halfWidth - 50;
-        const direction = this.node["initialDirection"]; // 初始移動方向
-        this.isMovingRight = direction === 1;
-        this.node.setScale(this.isMovingRight ? new Vec3(-1, 1, 1) : new Vec3(1, 1, 1)); // 根據方向設定初始翻面（朝右 = 負 scale）
 
-        // 泡泡與點擊事件
-        this.emotionBubble = this.node.getChildByName("EmotionBubble");
-        const iconNode = this.emotionBubble?.getChildByName('EmotionIcon');
+        // 根據初始方向設定翻面
+        const direction = (this.node as any)["initialDirection"];
+        this.isMovingRight = direction === 1;
+        this.node.setScale(this.isMovingRight ? new Vec3(-1, 1, 1) : new Vec3(1, 1, 1));
+
+        // 取得泡泡與表情 Sprite
+        this.emotionBubble = this.node.getChildByName("EmotionBubble") || null;
+        const iconNode = this.emotionBubble?.getChildByName('EmotionIcon') || null;
         this.emotionSprite = iconNode?.getChildByName('Sprite')?.getComponent(Sprite) || null;
         if (!this.emotionSprite) {
-            console.warn(`[SwimmingFish] 找不到 EmotionBubble 內的 Sprite，請確認泡泡底下有 Sprite 元件`);
+            console.warn('[SwimmingFish] 找不到 EmotionBubble/EmotionIcon/Sprite(Sprite)');
         }
 
-        const magnifierBtn = this.emotionBubble?.getChildByName("MagnifierBtn");
+        // 綁定點擊事件（魚本體、泡泡內放大鏡）
+        const magnifierBtn = this.emotionBubble?.getChildByName("MagnifierBtn") || null;
         magnifierBtn?.on(Node.EventType.TOUCH_END, this.onClickMagnifier, this);
         this.node.on(Node.EventType.TOUCH_END, this.onClickFish, this);
     }
 
-
-    update(dt: number) {
+    update(dt: number): void {
+        // 同時間只允許一條魚的泡泡是打開的
         if (this !== SwimmingFish.currentSelectedFish && this.emotionBubble?.active) {
             this.emotionBubble.active = false;
         }
 
-        if (this.emotionBubble?.active) return; // 泡泡開啟時不移動
+        // 泡泡開啟時讓魚停止移動（避免視覺抖動）
+        if (this.emotionBubble?.active) return;
 
+        // 基本左右移動邏輯 + 觸邊翻面
         const move = this.speed * dt * (this.isMovingRight ? 1 : -1);
         const newX = this.node.position.x + move;
         this.node.setPosition(newX, this.node.position.y, 0);
-        const worldX = this.node.getWorldPosition().x;
 
-        // 根據實際位置自動翻面
+        const worldX = this.node.getWorldPosition().x;
         if (worldX > this.fishAreaWorldRight && this.isMovingRight) {
             this.isMovingRight = false;
-            this.node.setScale(new Vec3(1, 1, 1));  // 朝左
+            this.node.setScale(new Vec3(1, 1, 1));
         } else if (worldX < this.fishAreaWorldLeft && !this.isMovingRight) {
             this.isMovingRight = true;
-            this.node.setScale(new Vec3(-1, 1, 1)); // 朝右
+            this.node.setScale(new Vec3(-1, 1, 1));
         }
-
     }
 
-    public setFishData(fish: FishData, opts?: { readOnly?: boolean; env?: any }) {
+    /** 設定此魚的資料與情緒環境（朋友魚缸可設唯讀） */
+    public setFishData(fish: FishData, opts?: { readOnly?: boolean; env?: any }): void {
         this.fishData = fish;
-        if (opts && 'readOnly' in opts) {
-            this.interactive = !opts.readOnly!;
-        }
-        if (opts?.env) {
-            this._envForEmotion = opts.env;
-        }
+        if (opts && 'readOnly' in opts) this.interactive = !opts.readOnly;
+        if (opts?.env) this._envForEmotion = opts.env;
+        this.refreshOutfit();
     }
 
-    async onClickFish() {
-        // if (!this.interactive) return; // 不讓朋友魚有任何點擊反應 (暫定)
+    /** 點擊魚本體：開/關泡泡、更新表情 */
+    async onClickFish(): Promise<void> {
         if (!this.emotionBubble) return;
 
+        // 再次點同一條魚 → 收起泡泡
         if (SwimmingFish.currentSelectedFish === this) {
             this.emotionBubble.active = false;
             SwimmingFish.currentSelectedFish = null;
             return;
         }
+        // 切換選取
         if (SwimmingFish.currentSelectedFish) {
             SwimmingFish.currentSelectedFish.emotionBubble!.active = false;
         }
         SwimmingFish.currentSelectedFish = this;
 
+        // 開啟泡泡 + Scale 動畫
         this.emotionBubble.active = true;
         this.emotionBubble.setScale(new Vec3(0.3, 0.3, 1));
         await this.updateBubbleEmotionIcon();
         tween(this.emotionBubble).to(0.25, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
     }
 
-
-    static clearSelection() {
+    /** 清除當前選取（給外部用） */
+    static clearSelection(): void {
         if (SwimmingFish.currentSelectedFish) {
             const bubble = SwimmingFish.currentSelectedFish.emotionBubble;
-            if (bubble && bubble.isValid) {
-                bubble.active = false;
-            }
+            if (bubble && bubble.isValid) bubble.active = false;
             SwimmingFish.currentSelectedFish = null;
         }
     }
 
-    async onClickMagnifier() {
+    /** 點泡泡上的放大鏡：跳到詳情面板（帶上當前表情） */
+    async onClickMagnifier(): Promise<void> {
         if (!this.fishData) return;
+
         const fishDetailManager = find('/GameManager')?.getComponent(FishDetailManager);
         if (!fishDetailManager) return;
 
-        if (!this._lastEmotionSprite) {
-            await this.updateBubbleEmotionIcon();
-        }
+        if (!this._lastEmotionSprite) await this.updateBubbleEmotionIcon();
 
         const readOnly = !this.interactive; // 朋友魚唯讀
         fishDetailManager.showFishDetail(this.fishData, this._lastEmotionSprite || null, { readOnly });
     }
 
-    private async updateBubbleEmotionIcon() {
+    /** 計算並更新泡泡的表情圖示 */
+    private async updateBubbleEmotionIcon(): Promise<void> {
         if (!this.emotionSprite || !this.fishData) return;
-        const env = this._envForEmotion || null; // 不回頭查 DataManager 了
+
+        const env = this._envForEmotion || null;
         const emo = SwimmingFish.computeEmotion(this.fishData, env);
+
+        try {
+            if (this.interactive) {
+                // 只在自己魚時才允許寫入
+                const pd = await DataManager.getPlayerDataCached();
+                const f = pd?.fishList.find(x => x.id === this.fishData.id);
+                if (f) { (f as any).emotion = emo; await DataManager.savePlayerDataWithCache(pd); }
+            }
+        } catch (e) {
+            console.warn('[SwimmingFish] save emotion failed', e);
+        }
+
+        // 更新泡泡圖示與快取
         const sf = SwimmingFish.getEmotionSpriteByKey(emo);
         if (sf) {
             this.emotionSprite.spriteFrame = sf;
@@ -153,17 +179,59 @@ export class SwimmingFish extends Component {
         }
     }
 
-    /** 依優先序決定情緒：sick > cold/hot > hungry(>=80)/hungry(<=20) > 隨機(happy|sad|angry) */
-    static computeEmotion(fish: FishData, env: any):
-        "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "sick" {
+    /** 計算顯示的情緒 */
+    static computeEmotion(fish: FishData, env: any): EmotionKey {
         if (fish.status?.sick) return "sick";
+
         const minComfort = 18, maxComfort = 23;
         if (env?.temperature < minComfort) return "cold";
         if (env?.temperature > maxComfort) return "hot";
-        if ((fish.hunger ?? 0) >= 80) return "hungry";
-        if ((fish.hunger ?? 0) <= 20) return "happy";
+
+        const hunger = fish.hunger ?? 0;
+        if (hunger >= 80) return "hungry";
+        if (hunger <= 20) return "happy";
+
         const pool = ["happy", "sad", "angry"] as const;
         return pool[Math.floor(Math.random() * pool.length)];
     }
 
+    /** 依魚的解鎖狀態與設定，更新頭飾外觀 */
+    public refreshOutfit(): void {
+        if (!this.hatAnchor || !this.fishData) return;
+
+        const unlocked = (this.fishData.stage ?? 1) >= 3;                 // 第 3 階後開放頭飾
+        const itemId = unlocked ? (this.fishData.outfit?.head ?? null) : null;
+
+        if (!itemId) {
+            if (this.hatNode) this.hatNode.active = false;
+            return;
+        }
+
+        // 尚未建立就動態建立頭飾節點
+        if (!this.hatNode || !this.hatNode.isValid) {
+            this.hatNode = new Node('FashionSprite');
+            this.hatNode.addComponent(Sprite);
+            this.hatAnchor.addChild(this.hatNode);
+        }
+
+        // 對應表：資料上的 itemId -> SpriteFrame
+        const spriteMap: Record<string, SpriteFrame> = {
+            acc_bowtie: this.hatFrames[0],
+            hat_chef: this.hatFrames[1],
+            hat_fedora: this.hatFrames[2],
+            acc_sunglass: this.hatFrames[3],
+        };
+
+        const sp = this.hatNode.getComponent(Sprite)!;
+        const sf = spriteMap[itemId];
+
+        if (sf) {
+            sp.spriteFrame = sf;
+            this.hatNode.active = true;
+            this.hatNode.setPosition(Vec3.ZERO);
+            this.hatNode.setScale(1, 1, 1);
+        } else {
+            this.hatNode.active = false;
+        }
+    }
 }

@@ -365,6 +365,7 @@ export class GameManager extends Component {
             // 只呼叫一次 setFishData，並把唯讀與環境一併傳入
             const comp = node.getComponent(SwimmingFish);
             comp?.setFishData(fish, { readOnly, env: envForEmotion });
+            comp?.refreshOutfit();
 
             // 位置/方向
             const dir = Math.random() > 0.5 ? 1 : -1;

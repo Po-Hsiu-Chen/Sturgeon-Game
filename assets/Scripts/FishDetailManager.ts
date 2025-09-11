@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Label, Sprite, SpriteFrame, EditBox, Vec3, tween, UITransform, UIOpacity, Button, Color } from 'cc';
+import { _decorator, Component, Node, Label, Sprite, SpriteFrame, EditBox, Vec3, tween, Tween, UITransform, UIOpacity, Button, Color, Prefab, instantiate } from 'cc';
 import { SwimmingFish } from './SwimmingFish';
 import { FishLogic } from './FishLogic';
 import { GameManager } from './GameManager';
@@ -7,6 +7,14 @@ import { playOpenPanelAnim, showFloatingTextCenter } from './utils/UIUtils';
 import { ConfirmDialogManager } from './ConfirmDialogManager';
 
 const { ccclass, property } = _decorator;
+
+type FashionSlot = 'head';
+const FASHION_CATALOG: Record<string, { slot: FashionSlot; name: string; iconIndex: number }> = {
+    acc_bowtie: { slot: 'head', name: '蝴蝶結', iconIndex: 0 },
+    hat_chef: { slot: 'head', name: '廚師帽', iconIndex: 1 },
+    hat_fedora: { slot: 'head', name: '紳士帽', iconIndex: 2 },
+    acc_sunglass: { slot: 'head', name: '墨鏡', iconIndex: 3 },
+};
 
 @ccclass('FishDetailManager')
 export class FishDetailManager extends Component {
@@ -48,6 +56,9 @@ export class FishDetailManager extends Component {
 
     // Fashion 相關
     @property(Node) fashionSection: Node = null!;
+    @property(Node) fashionGrid: Node = null!;
+    @property(Prefab) ownedItemCardPrefab: Prefab = null!;
+    @property([SpriteFrame]) fashionIcons: SpriteFrame[] = []; // bowtie, chefhat, hat, sunglass
 
     // 關閉按鈕
     @property(Node) closeButton: Node = null!;
@@ -72,6 +83,7 @@ export class FishDetailManager extends Component {
     private _currentTab: 'feed' | 'heal' | 'fashion' = 'feed';
     private _tabKeys: Array<'feed' | 'heal' | 'fashion'> = ['feed', 'heal', 'fashion'];
     private _tabSections!: Record<'feed' | 'heal' | 'fashion', Node>;
+
 
     /** 初始化 */
     start() {
@@ -98,7 +110,18 @@ export class FishDetailManager extends Component {
             const btn = this.tabButtons[i];
 
             btn.off(Node.EventType.TOUCH_END);
-            btn.on(Node.EventType.TOUCH_END, () => {
+            btn.on(Node.EventType.TOUCH_END, async () => {
+                if (this.isReadOnly && (key === 'heal' || key === 'fashion')) {
+                    showFloatingTextCenter(this.floatingNode, '朋友的魚缸只能瀏覽，無法使用這個分頁');
+                    return;
+                }
+                if (key === 'fashion') {
+                    const { fish } = await this.getCurrentFishAndPlayer();
+                    if (!fish || fish.stage < 3) {
+                        showFloatingTextCenter(this.floatingNode, '需要達到第 3 階才能使用時裝');
+                        return;
+                    }
+                }
                 this.switchTab(key);
             });
         }
@@ -108,22 +131,24 @@ export class FishDetailManager extends Component {
         this.renameButton.on(Node.EventType.TOUCH_END, this.showRenamePanel, this);
         this.renameConfirmButton.on(Node.EventType.TOUCH_END, this.renameFish, this);
         this.renameCancelButton.on(Node.EventType.TOUCH_END, this.hideRenamePanel, this);
-
-        this.genderPotionBtn.on(Node.EventType.TOUCH_END, this.onUseGenderPotion, this);
-        this.upgradePotionBtn.on(Node.EventType.TOUCH_END, this.onUseUpgradePotion, this);
-        this.coldMedicineBtn.on(Node.EventType.TOUCH_END, this.onUseColdMedicine, this);
-        this.changePotionBtn.on(Node.EventType.TOUCH_END, this.onUseChangePotion, this);
     }
 
     /** 顯示魚詳細資訊（opts.readOnly: 朋友魚唯讀） */
     async showFishDetail(
         fish: FishData,
         emotionSprite?: SpriteFrame | null,
-        opts?: { readOnly?: boolean }
+        opts?: { readOnly?: boolean; preserveTab?: boolean }
     ) {
         playOpenPanelAnim(this.fishDetailPanel);
         this.currentFishId = fish.id;
-        this.switchTab('feed'); // 預設顯示餵食面板
+
+        // 判斷是否唯讀（朋友魚缸）
+        this.isReadOnly = !!opts?.readOnly;
+
+        // 決定要切去哪一頁（唯讀固定 feed）
+        const preserve = !!opts?.preserveTab;
+        const targetTab = this.isReadOnly ? 'feed' : (preserve ? this._currentTab : 'feed');
+        this.switchTab(targetTab);
 
         // 顯示魚基本資訊
         this.fishNameLabel.string = fish.name;
@@ -132,18 +157,19 @@ export class FishDetailManager extends Component {
         this.stageLabel.string = `LV ${fish.stage}`;
         this.hungerLabel.string = `飢餓值：${Math.floor(fish.hunger)} / 100`;
 
-        // 判斷是否唯讀（朋友魚缸）
-        const isReadOnly = !!opts?.readOnly;
+        // 分頁可見性/互動（朋友缸：只留 Feed）
+        const canUseHeal = !this.isReadOnly;
+        const canUseFashion = !this.isReadOnly && (fish.stage ?? 1) >= 3;
+
+        // 按鈕可點與視覺
+        this.setButtonEnabled(this.tabButtons[1], canUseHeal);     // Heal
+        this.setButtonEnabled(this.tabButtons[2], canUseFashion);  // Fashion
 
         // 顯示剩餘數量
-        if (isReadOnly) {
+        if (this.isReadOnly) {
             // 朋友魚數量顯示為 "-"
             this.feedNormalCountLabel.string = "-";
             this.feedPremiumCountLabel.string = "-";
-            this.genderPotionCountLabel.string = "-";
-            this.upgradePotionCountLabel.string = "-";
-            this.changePotionCountLabel.string = "-";
-            this.coldMedicineCountLabel.string = "-";
         } else {
             // 自己的魚顯示實際數量
             const playerData = await DataManager.getPlayerDataCached();
@@ -164,7 +190,7 @@ export class FishDetailManager extends Component {
         this.changePotionBtn.off(Node.EventType.TOUCH_END);
 
         // 只有「非唯讀」才綁定事件
-        if (!isReadOnly) {
+        if (!this.isReadOnly) {
             this.feedBtnNormal.on(Node.EventType.TOUCH_END, this.feedNormal, this);
             this.feedBtnPremium.on(Node.EventType.TOUCH_END, this.feedPremium, this);
             this.genderPotionBtn.on(Node.EventType.TOUCH_END, this.onUseGenderPotion, this);
@@ -174,30 +200,23 @@ export class FishDetailManager extends Component {
         }
 
         // 鎖定互動
-        this.feedBtnNormal.getComponent(Button)!.interactable = !isReadOnly;
-        this.feedBtnPremium.getComponent(Button)!.interactable = !isReadOnly;
-        this.genderPotionBtn.getComponent(Button)!.interactable = !isReadOnly;
-        this.upgradePotionBtn.getComponent(Button)!.interactable = !isReadOnly;
-        this.coldMedicineBtn.getComponent(Button)!.interactable = !isReadOnly;
-        this.changePotionBtn.getComponent(Button)!.interactable = !isReadOnly;
-        this.renameButton.getComponent(Button)!.interactable = !isReadOnly;
+        this.feedBtnNormal.getComponent(Button)!.interactable = !this.isReadOnly;
+        this.feedBtnPremium.getComponent(Button)!.interactable = !this.isReadOnly;
 
         // 情緒圖 (優先使用 SwimmingFish 傳來的 sprite)
         if (emotionSprite) {
             this.fishStatusImage.spriteFrame = emotionSprite;
         } else {
-            const playerData = await DataManager.getPlayerDataCached();
+            const { env } = await this.getCurrentFishAndPlayer();
             const currentEmotion = fish.emotion as any;
             if (currentEmotion) {
-                const sf = SwimmingFish.getEmotionSpriteByKey(currentEmotion);
-                this.fishStatusImage.spriteFrame = sf;
+                this.fishStatusImage.spriteFrame = SwimmingFish.getEmotionSpriteByKey(currentEmotion);
             } else {
-                const env = playerData.tankEnvironment;
                 const computed = SwimmingFish.computeEmotion(fish, env);
-                const sf = SwimmingFish.getEmotionSpriteByKey(computed);
-                this.fishStatusImage.spriteFrame = sf;
+                this.fishStatusImage.spriteFrame = SwimmingFish.getEmotionSpriteByKey(computed);
             }
         }
+
     }
 
     /** 餵食 */
@@ -220,10 +239,21 @@ export class FishDetailManager extends Component {
 
         const msg = FishLogic.feed(fish, playerData.inventory, amount, type);
         console.log(msg);
-        await DataManager.savePlayerDataWithCache(playerData);
-        this.showFishDetail(fish);
 
+        // 儲存
+        await DataManager.savePlayerDataWithCache(playerData);
+
+        // 立即更新 UI
+        this.hungerLabel.string = `飢餓值：${Math.floor(fish.hunger)} / 100`;
+        this.feedNormalCountLabel.string = playerData.inventory.feeds.normal.toString();
+        this.feedPremiumCountLabel.string = playerData.inventory.feeds.premium.toString();
         this.showFloatingTextRightOf(this.hungerLabel.node, `餵食 -${amount}`);
+
+        // 把最新 fish 物件放回場上的 SwimmingFish
+        const fishes = this.node.scene.getComponentsInChildren(SwimmingFish);
+        const comp = fishes.find(c => c.fishData?.id === fish.id);
+        comp?.setFishData(fish);
+
     }
 
     /** 重新命名 */
@@ -251,15 +281,20 @@ export class FishDetailManager extends Component {
 
     /** Tab 切換 */
     switchTab(tabName: 'feed' | 'heal' | 'fashion') {
+        // 朋友缸：強制只顯示 Feed（保險）
+        if (this.isReadOnly && tabName !== 'feed') {
+            showFloatingTextCenter(this.floatingNode, '朋友的魚缸只能瀏覽，無法使用這個分頁');
+            tabName = 'feed';
+        }
+
         this._currentTab = tabName;
-
-        // 控制 Section 顯示
-        this._tabKeys.forEach(key => {
-            this._tabSections[key].active = (key === tabName);
-        });
-
-        // 更新按鈕狀態
+        this._tabKeys.forEach(key => this._tabSections[key].active = (key === tabName));
         this.updateTabVisuals();
+
+        // 唯讀不渲染 fashion grid
+        if (tabName === 'fashion' && !this.isReadOnly) {
+            this.getCurrentFishAndPlayer().then(({ fish }) => { if (fish) this.renderFashionGrid(fish); });
+        }
     }
 
     /** 更新按鈕顏色（選中白色、未選灰色） */
@@ -298,7 +333,7 @@ export class FishDetailManager extends Component {
         const msg = FishLogic.useGenderPotion(fish, playerData.inventory.items);
         await DataManager.savePlayerDataWithCache(playerData);
         console.log(msg);
-        this.showFishDetail(fish); // 更新畫面
+        await this.showFishDetail(fish, undefined, { preserveTab: true });
 
         this.showFloatingTextRightOf(this.genderLabel.node, '變性完成！');
 
@@ -329,8 +364,8 @@ export class FishDetailManager extends Component {
         const { message, upgraded } = FishLogic.useUpgradePotion(fish, playerData.inventory.items);
         await DataManager.savePlayerDataWithCache(playerData);
         console.log(message);
+        await this.showFishDetail(fish, undefined, { preserveTab: true });
 
-        await this.showFishDetail(fish); // 更新資訊
         this.showFloatingTextRightOf(this.daysLabel.node, '成長天數 +5');
 
         if (upgraded) {
@@ -375,7 +410,7 @@ export class FishDetailManager extends Component {
                 gameManager.replaceFishNode(fish);
             }
             this.showFloatingTextRightOf(this.fishStatusImage.node, '已治癒！');
-            await this.showFishDetail(fish);
+            await this.showFishDetail(fish, undefined, { preserveTab: true });
         }
     }
 
@@ -383,27 +418,18 @@ export class FishDetailManager extends Component {
     onUseChangePotion() {
         this.getCurrentFishAndPlayer().then(async ({ playerData, fish }) => {
             if (!playerData || !fish) return;
-
-            // 先檢查階段
-            if (fish.stage < 6) {
-                showFloatingTextCenter(this.floatingNode, '需要達到第 6 階才能使用整形藥');
-                return;
-            }
-
-            // 再檢查數量
             if (playerData.inventory.items.changePotion <= 0) {
                 showFloatingTextCenter(this.floatingNode, '沒有整形藥了');
                 return;
             }
-
-            // 確認使用
+            if (fish.stage < 6) {
+                showFloatingTextCenter(this.floatingNode, '需要達到第 6 階才能使用整形藥');
+            }
             const ok = await this.confirmDialogManager.ask('確定要使用整形藥嗎？');
             if (!ok) return;
-
             await this.useChangePotion();
         })
     }
-
     private async useChangePotion() {
         const playerData = await DataManager.getPlayerDataCached();
         const fish = playerData.fishList.find(f => f.id === this.currentFishId);
@@ -412,7 +438,9 @@ export class FishDetailManager extends Component {
         const msg = FishLogic.useChangePotion(fish, playerData.inventory.items);
         await DataManager.savePlayerDataWithCache(playerData);
         console.log(msg);
-        this.showFishDetail(fish); // 更新畫面
+        await this.showFishDetail(fish, undefined, { preserveTab: true });
+
+        //this.showFloatingTextRightOf(this.genderLabel.node, '整形完成！');
 
         const gameManager = this.node.scene.getComponentInChildren(GameManager);
         if (gameManager) {
@@ -431,9 +459,19 @@ export class FishDetailManager extends Component {
     }
 
     private async getCurrentFishAndPlayer() {
+        const gm = this.node.scene.getComponentInChildren(GameManager) as any;
+        // 在朋友缸：從 gm.viewingFriend 取資料
+        if (gm?.isViewingFriend) {
+            const friend = gm.viewingFriend;
+            const fish = friend?.fishList?.find((f: any) => f.id === this.currentFishId) as FishData | undefined;
+            const env = friend?.tankEnvironment;
+            return { playerData: null, fish, env, isFriend: true };
+        }
+        // 在自己缸：走原本的 DataManager
         const playerData = await DataManager.getPlayerDataCached();
         const fish = playerData?.fishList.find(f => f.id === this.currentFishId) as FishData | undefined;
-        return { playerData, fish };
+        const env = playerData?.tankEnvironment;
+        return { playerData, fish, env, isFriend: false };
     }
 
     showFloatingTextRightOf(targetNode: Node, text: string) {
@@ -443,6 +481,10 @@ export class FishDetailManager extends Component {
             console.warn('FloatingText node is missing UIOpacity component!');
             return;
         }
+
+        // 停掉舊動畫，避免卡頓/疊動畫
+        Tween.stopAllByTarget(node);
+        Tween.stopAllByTarget(uiOpacity);
 
         // 設定文字內容與起始狀態
         this.floatingText.string = text;
@@ -503,5 +545,63 @@ export class FishDetailManager extends Component {
 
     hideRenamePanel() {
         this.RenamePanel.active = false;
+    }
+
+    private async renderFashionGrid(fish: FishData) {
+        this.fashionGrid.removeAllChildren();
+
+        const pd = await DataManager.getPlayerDataCached();
+        const ownedIds = (pd.fashion?.owned ?? []).filter(id => !!FASHION_CATALOG[id]);
+        const items = ownedIds.map(id => ({
+            id,
+            ...FASHION_CATALOG[id],
+            icon: this.fashionIcons[FASHION_CATALOG[id].iconIndex],
+        }));
+
+        const unlocked = (fish.stage ?? 1) >= 3;
+
+        for (const it of items) {
+            const card = instantiate(this.ownedItemCardPrefab);
+
+            const iconNode = card.getChildByName('Frame');
+            const iconSp = iconNode?.getChildByName('ItemImage')?.getComponent(Sprite)!;
+            const nameLbl = card.getChildByName('NameLabel')?.getComponent(Label)!;
+            const badge = card.getChildByName('EquippedBadge')!;
+            const btn = card.getComponent(Button) || card.addComponent(Button);
+            const op = card.getComponent(UIOpacity) || card.addComponent(UIOpacity);
+
+            iconSp.spriteFrame = it.icon;
+            nameLbl.string = it.name;
+            badge.active = (fish.outfit?.head === it.id);
+
+            btn.interactable = unlocked && !this.isReadOnly;
+            op.opacity = (unlocked && !this.isReadOnly) ? 255 : 120;
+
+            card.on(Node.EventType.TOUCH_END, async () => {
+                if (!btn.interactable) {
+                    showFloatingTextCenter(this.floatingNode, '需要達到第 3 階才能使用時裝');
+                    return;
+                }
+                const fresh = await DataManager.getPlayerDataCached();
+                const f = fresh.fishList.find(x => x.id === fish.id);
+                if (!f) return;
+
+                f.outfit = f.outfit ?? { head: null, accessories: [] };
+                f.outfit.head = (f.outfit.head === it.id) ? null : it.id;
+                await DataManager.savePlayerDataWithCache(fresh);
+
+                await this.showFishDetail(f, undefined, { preserveTab: true }); // 重畫面板
+
+                // 立刻刷新場上的那條魚
+                const fishes = this.node.scene.getComponentsInChildren(SwimmingFish);
+                const comp = fishes.find(c => c.fishData?.id === f.id);
+                if (comp) {
+                    comp.setFishData(f);     // 把最新的 fish 物件放回去
+                    comp.refreshOutfit();    // 立即依新資料換外觀
+                }
+            });
+
+            this.fashionGrid.addChild(card);
+        }
     }
 }
