@@ -558,7 +558,7 @@ export class FishDetailManager extends Component {
             icon: this.fashionIcons[FASHION_CATALOG[id].iconIndex],
         }));
 
-        const unlocked = (fish.stage ?? 1) >= 3;
+        const unlocked = (fish.stage ?? 1) >= 6;
 
         for (const it of items) {
             const card = instantiate(this.ownedItemCardPrefab);
