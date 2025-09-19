@@ -1,6 +1,7 @@
 import { _decorator, Component, Vec3, Node, find, UITransform, Sprite, SpriteFrame, tween } from 'cc';
 import { FishDetailManager } from './FishDetailManager';
 import { DataManager, type FishData } from './DataManager';
+import { FashionManager } from './FashionManager';
 
 const { ccclass, property } = _decorator;
 
@@ -10,7 +11,6 @@ type EmotionKey = "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "sick"
 export class SwimmingFish extends Component {
     // -------------------- 外觀 / 時裝 --------------------
     @property(Node) hatAnchor: Node = null!;                 // 頭飾掛點（在魚 prefab 上）
-    @property([SpriteFrame]) hatFrames: SpriteFrame[] = [];  // 頭飾圖片：依序 bowtie, chefhat, fedora, sunglass
     private hatNode: Node | null = null;                     // 由程式動態建立的頭飾節點
 
     // -------------------- 資料 / 互動屬性 --------------------
@@ -199,7 +199,7 @@ export class SwimmingFish extends Component {
     public refreshOutfit(): void {
         if (!this.hatAnchor || !this.fishData) return;
 
-        const unlocked = (this.fishData.stage ?? 1) >= 3;                 // 第 3 階後開放頭飾
+        const unlocked = (this.fishData.stage ?? 1) >= 6;
         const itemId = unlocked ? (this.fishData.outfit?.head ?? null) : null;
 
         if (!itemId) {
@@ -214,16 +214,9 @@ export class SwimmingFish extends Component {
             this.hatAnchor.addChild(this.hatNode);
         }
 
-        // 對應表：資料上的 itemId -> SpriteFrame
-        const spriteMap: Record<string, SpriteFrame> = {
-            acc_bowtie: this.hatFrames[0],
-            hat_chef: this.hatFrames[1],
-            hat_fedora: this.hatFrames[2],
-            acc_sunglass: this.hatFrames[3],
-        };
-
+        // 向全域 Manager 拿圖
+        const sf = FashionManager.get(itemId); 
         const sp = this.hatNode.getComponent(Sprite)!;
-        const sf = spriteMap[itemId];
 
         if (sf) {
             sp.spriteFrame = sf;

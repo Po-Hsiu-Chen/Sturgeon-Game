@@ -5,15 +5,22 @@ import { GameManager } from './GameManager';
 import { DataManager, FishData } from './DataManager';
 import { playOpenPanelAnim, showFloatingTextCenter } from './utils/UIUtils';
 import { ConfirmDialogManager } from './ConfirmDialogManager';
+import { FashionManager } from './FashionManager';
 
 const { ccclass, property } = _decorator;
 
 type FashionSlot = 'head';
 const FASHION_CATALOG: Record<string, { slot: FashionSlot; name: string; iconIndex: number }> = {
-    acc_bowtie: { slot: 'head', name: '蝴蝶結', iconIndex: 0 },
-    hat_chef: { slot: 'head', name: '廚師帽', iconIndex: 1 },
-    hat_fedora: { slot: 'head', name: '紳士帽', iconIndex: 2 },
-    acc_sunglass: { slot: 'head', name: '墨鏡', iconIndex: 3 },
+  acc_bowtie:   { slot:'head', name:'蝴蝶結',   iconIndex: 0 },
+  hat_chef:     { slot:'head', name:'廚師帽',   iconIndex: 1 },
+  hat_fedora:   { slot:'head', name:'紳士帽',   iconIndex: 2 },
+  acc_sunglass: { slot:'head', name:'墨鏡',     iconIndex: 3 },
+  hat_crown:        { slot:'head', name:'皇冠',       iconIndex: 4 },
+  acc_flower:       { slot:'head', name:'花環',       iconIndex: 5 },
+  acc_heart_glass:  { slot:'head', name:'愛心眼鏡',   iconIndex: 6 },
+  hat_magic:        { slot:'head', name:'魔法帽',     iconIndex: 7 },
+  hat_beret:        { slot:'head', name:'畫家帽',     iconIndex: 8 },
+  hat_party:        { slot:'head', name:'派對帽',     iconIndex: 9 },
 };
 
 @ccclass('FishDetailManager')
@@ -58,7 +65,6 @@ export class FishDetailManager extends Component {
     @property(Node) fashionSection: Node = null!;
     @property(Node) fashionGrid: Node = null!;
     @property(Prefab) ownedItemCardPrefab: Prefab = null!;
-    @property([SpriteFrame]) fashionIcons: SpriteFrame[] = []; // bowtie, chefhat, hat, sunglass
 
     // 關閉按鈕
     @property(Node) closeButton: Node = null!;
@@ -555,7 +561,7 @@ export class FishDetailManager extends Component {
         const items = ownedIds.map(id => ({
             id,
             ...FASHION_CATALOG[id],
-            icon: this.fashionIcons[FASHION_CATALOG[id].iconIndex],
+            icon: FashionManager.get(id),
         }));
 
         const unlocked = (fish.stage ?? 1) >= 6;

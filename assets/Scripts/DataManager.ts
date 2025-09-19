@@ -37,7 +37,7 @@ export interface FishData {
     isDead: boolean;                     // 是否死了
     deathDate?: string;                  // 死掉時間
     tankId: number;                      // 所在魚缸          
-    adultForm?: "form1"|"form2"|"form3"|"form4";           // 成魚(第六階)形態
+    adultForm?: "form1" | "form2" | "form3" | "form4";           // 成魚(第六階)形態
 }
 
 /** 魚缸環境狀態 */
@@ -341,7 +341,7 @@ export class DataManager {
     static async sendFriendRequest(friendId: string): Promise<{ request: FriendRequest }> {
         const id = this.currentUserId;
         if (!id) throw new Error('no current user');
-        if (!friendId) throw new Error('no friendId'); 
+        if (!friendId) throw new Error('no friendId');
         const res = await fetch(`${this.apiBase}/friend-requests`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -518,12 +518,27 @@ export class DataManager {
             'heater': (n) => addItem('items.heater', n),
         };
 
+        const FASHION_BY_SKU: Record<string, string> = {
+            cloth_bow: 'acc_bowtie',
+            cloth_chef_hat: 'hat_chef',
+            cloth_fedora: 'hat_fedora',
+            cloth_sun_glass: 'acc_sunglass',
+
+            cloth_crown: 'hat_crown',
+            cloth_flower: 'acc_flower',
+            cloth_heart_glass: 'acc_heart_glass',
+            cloth_magic_hat: 'hat_magic',
+            cloth_paint_hat: 'hat_beret',
+            cloth_party_hat: 'hat_party',
+            // 之後有新時裝就補在這
+        };
+
         if (APPLY[sku]) {
             APPLY[sku](qty);
         } else {
-            // 非消耗型/時裝之類：示意把 sku 放到 fashion.owned
-            if (pd.fashion.owned.indexOf(sku) === -1) {
-                pd.fashion.owned.push(sku);
+            const fashionId = FASHION_BY_SKU[sku] || sku; // 沒對應就保留原樣
+            if (pd.fashion.owned.indexOf(fashionId) === -1) {
+                pd.fashion.owned.push(fashionId);
             }
         }
 

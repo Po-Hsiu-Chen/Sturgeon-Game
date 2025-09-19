@@ -507,7 +507,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": -83.311,
-      "y": 34.964,
+      "y": 38.951,
       "z": 0
     },
     "_lrot": {
@@ -519,9 +519,9 @@
     },
     "_lscale": {
       "__type__": "cc.Vec3",
-      "x": 0.081,
-      "y": 0.081,
-      "z": 1.244
+      "x": 0.103,
+      "y": 0.103,
+      "z": 1.59
     },
     "_mobility": 0,
     "_layer": 33554432,
@@ -761,24 +761,6 @@
     "hatAnchor": {
       "__id__": 20
     },
-    "hatFrames": [
-      {
-        "__uuid__": "8cb14a75-4e94-45f2-bf61-5571ac5f1310@f9941",
-        "__expectedType__": "cc.SpriteFrame"
-      },
-      {
-        "__uuid__": "c9a6cba2-4899-4a9d-ada9-e7d884de7cc3@f9941",
-        "__expectedType__": "cc.SpriteFrame"
-      },
-      {
-        "__uuid__": "cfeefcbe-454e-4d58-af74-836d52a03985@f9941",
-        "__expectedType__": "cc.SpriteFrame"
-      },
-      {
-        "__uuid__": "fc73162d-b934-4b1b-b27d-52d4d00fb106@f9941",
-        "__expectedType__": "cc.SpriteFrame"
-      }
-    ],
     "interactive": true,
     "_id": ""
   },
