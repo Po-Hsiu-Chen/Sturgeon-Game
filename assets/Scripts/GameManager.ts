@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, UITransform, Vec3, Button, SpriteFrame, ImageAsset, Texture2D, Color } from 'cc';
+import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, UITransform, Vec3, Button, SpriteFrame, ImageAsset, Texture2D, Color, UIOpacity } from 'cc';
 import { SwimmingFish } from './SwimmingFish';
 import { DataManager, FishData, PlayerData } from './DataManager';
 import { FishLogic } from './FishLogic';
@@ -70,7 +70,8 @@ export class GameManager extends Component {
     @property(Node) coldOverlay: Node = null!;                   // 冷
     @property(Node) hotOverlay: Node = null!;                    // 熱
 
-    // 簽到面板
+    // 簽到相關
+    @property(Button) singInBtn: Button = null!;
     @property(Node) signInPanel: Node = null!;
 
     // 提示面板
@@ -81,9 +82,10 @@ export class GameManager extends Component {
     @property(Button) tombHintCloseBtn: Button = null!;         // 墓地提示關閉按鈕
 
     @property(Button) backToMyTankBtn: Button = null!;          // 返回自己魚缸按鈕
+    @property(Button) mailBoxBtn: Button = null!;
     @property(Node) mailboxRedDot: Node = null!;                // Mail未讀紅點點
-
     @property(Button) addFishBtn: Button = null!;               // 加魚按鈕
+
     @property(Label) tankFishCountLabel: Label = null!;         // 顯示魚數量/上限
 
     private currentTankId: number = 1;                          // 當前魚缸 ID
@@ -412,15 +414,21 @@ export class GameManager extends Component {
             envForEmotion: this.playerData!.tankEnvironment,    // 用自己的環境
             readOnly: false                                     // 自己的魚非唯讀
         });
+        this.applyFriendViewUI(false);
         this.updateTankFishCountLabel();
         this.updateAddFishBtnState();
         await this.refreshEnvironmentUI();
+        this.updateTankButtons();
     }
 
     /** 顯示朋友魚缸 */
     public showFriendTank(friend: Pick<PlayerData, 'tankList' | 'fishList' | 'tankEnvironment' | 'userId' | 'displayName'>) {
         this.isViewingFriend = true;
         this.viewingFriend = friend;
+
+        // 切出主視圖、關掉墓地
+        this.activeTankViewport.active = true;   // 顯示主視圖（朋友的魚缸會畫在這裡）
+        this.tombTankNode.active = false;        // 關閉墓地視圖
 
         const firstTank = friend.tankList?.[0];
         if (!firstTank) { showFloatingTextCenter(this.floatingNode, '這位好友還沒有魚缸'); return; }
@@ -434,9 +442,9 @@ export class GameManager extends Component {
 
         if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = true;
 
-        // 隱藏墓地按鈕、遮蔽金錢
-        if (this.tombTankBtn) this.tombTankBtn.node.active = false;
-        if (this.dragonboneLabel) this.dragonboneLabel.string = '保密';
+        // 換 header 後
+        this.applyFriendViewUI(true);  
+        this.updateTankButtons();
 
         const viewport = this.getActiveViewport();
         this.renderTankView({
@@ -527,9 +535,52 @@ export class GameManager extends Component {
     private async backToMyTank() {
         this.isViewingFriend = false;
         this.viewingFriend = null; // 清掉朋友狀態
-        if (this.tombTankBtn) this.tombTankBtn.node.active = true; // 顯示墓地按鈕回來
-        if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = false;
         await this.switchTank(1);
+    }
+
+    /** 依目前視圖（自己/朋友）更新 Tank_1~3 的數字、鎖頭與可點狀態 */
+    private updateTankButtons() {
+        const totalOpened = this.isViewingFriend
+            ? (this.viewingFriend?.tankList?.length ?? 0)
+            : (this.playerData?.tankList?.length ?? 0);
+
+        this.tankButtons.forEach((btn, i) => {
+            const n = btn.node;
+            // 標號
+            const label = n.getChildByName('Label')?.getComponent(Label);
+            if (label) label.string = String(i + 1);
+
+            // 是否已開這一缸（index 從 0 開始）
+            const unlocked = (i < totalOpened);
+
+            // 鎖頭顯示
+            const lockNode = n.getChildByName('padlock');
+            if (lockNode) lockNode.active = !unlocked;
+
+            // 是否可點
+            btn.interactable = unlocked;
+        });
+    }
+
+    /** 依是否為朋友魚缸切換 UI 顯示/隱藏 */
+    private applyFriendViewUI(isFriend: boolean) {
+        // 墓地按鈕 / 返回自己魚缸
+        if (this.tombTankBtn) this.tombTankBtn.node.active = !isFriend;
+        if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = isFriend;
+
+        // 簽到
+        if (this.singInBtn) this.singInBtn.node.active = !isFriend;
+
+        // 加魚 / 信箱
+        if (this.addFishBtn) this.addFishBtn.node.active = !isFriend;
+        if (this.mailBoxBtn) this.mailBoxBtn.node.active = !isFriend;
+
+        // 龍骨數字
+        if (this.dragonboneLabel) {
+            this.dragonboneLabel.string = isFriend
+                ? '保密'
+                : (this.playerData?.dragonBones?.toString() ?? '0');
+        }
     }
 
     // -----------------------------每日流程 / 環境顯示--------------------------------
@@ -1018,14 +1069,14 @@ export class GameManager extends Component {
     private async initCapsAndRules() {
         if (!this.playerData) return;
 
-        // 為每個缸補 capacity：第一缸預設3，其它缸預設5
+        // 為每個缸補 capacity：第一缸預設3，其它缸預設6
         for (const tank of this.playerData.tankList) {
             if (tank.capacity == null) {
-                tank.capacity = (tank.id === 1) ? 3 : 5;
+                tank.capacity = (tank.id === 1) ? 3 : 6;
             }
         }
 
-        // 若當前只有第一缸，且已達「3隻≥3階」，就把第一缸容量升到5
+        // 若當前只有第一缸，且已達「3隻≥3階」，就把第一缸容量升到6
         await this.checkAndUnlockCapacityForFirstTank();
 
         // 若符合開新缸條件，幫玩家補開（最多到3缸）
@@ -1060,8 +1111,8 @@ export class GameManager extends Component {
 
         // 至少有 3 隻達標
         const fish = this.getAliveFishInTank(1);
-        const countGte3 = fish.filter(f => (f.stage ?? 1) >= 3).length;
-        if ((tank1.capacity ?? 3) < 6 && countGte3 >= 3) {
+        const allGte3 = fish.length > 0 && fish.every(f => (f.stage ?? 1) >= 3);
+        if ((tank1.capacity ?? 3) < 6 && allGte3) {
             tank1.capacity = 6;
             await DataManager.savePlayerDataWithCache(this.playerData);
             showFloatingTextCenter(this.floatingNode, "第一缸容量解鎖：3 → 6！");
@@ -1234,16 +1285,26 @@ export class GameManager extends Component {
         // 魚滿 → 不能加
         const tank = this.playerData.tankList.find(t => t.id === this.currentTankId);
         if (!tank) return;
-        const capacity = tank.capacity ?? (tank.id === 1 ? 3 : 5);
+        const capacity = tank.capacity ?? (tank.id === 1 ? 3 : 6);
         const alive = this.getAliveFishInTank(this.currentTankId).length;
         this.addFishBtn.interactable = alive < capacity;
     }
 
     private onClickTankButton(index: number) {
+        // 自己頁：若未解鎖就提示
+        if (!this.isViewingFriend) {
+            const opened = this.playerData?.tankList?.length ?? 0;
+            if (index >= opened) {
+                showFloatingTextCenter(this.floatingNode, '這個魚缸尚未開啟');
+                return;
+            }
+        }
+        // 朋友頁
         if (this.isViewingFriend && this.viewingFriend) {
             this.renderFriendTankByIndex(index);
         } else {
             this.switchTank(index + 1);
         }
     }
+
 }

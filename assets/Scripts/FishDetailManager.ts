@@ -123,8 +123,8 @@ export class FishDetailManager extends Component {
                 }
                 if (key === 'fashion') {
                     const { fish } = await this.getCurrentFishAndPlayer();
-                    if (!fish || fish.stage < 3) {
-                        showFloatingTextCenter(this.floatingNode, '需要達到第 3 階才能使用時裝');
+                    if (!fish || fish.stage < 6) {
+                        showFloatingTextCenter(this.floatingNode, '需要達到第 6 階才能使用時裝');
                         return;
                     }
                 }
@@ -430,6 +430,7 @@ export class FishDetailManager extends Component {
             }
             if (fish.stage < 6) {
                 showFloatingTextCenter(this.floatingNode, '需要達到第 6 階才能使用整形藥');
+                return;
             }
             const ok = await this.confirmDialogManager.ask('確定要使用整形藥嗎？');
             if (!ok) return;
@@ -585,7 +586,7 @@ export class FishDetailManager extends Component {
 
             card.on(Node.EventType.TOUCH_END, async () => {
                 if (!btn.interactable) {
-                    showFloatingTextCenter(this.floatingNode, '需要達到第 3 階才能使用時裝');
+                    showFloatingTextCenter(this.floatingNode, '需要達到第 6 階才能使用時裝');
                     return;
                 }
                 const fresh = await DataManager.getPlayerDataCached();
