@@ -24,4 +24,11 @@ export const MOCK_CATALOG: CatalogItem[] = [
   { id: '18', sku: 'hat_party', name: '派對帽', type: 'NON_CONSUMABLE', category: '服飾', iconKey: 'party_hat', priceSoft: { currency: 'DRAGONBONE', amount: 12 } },
   { id: '19', sku: 'acc_sunglass', name: '墨鏡', type: 'NON_CONSUMABLE', category: '服飾', iconKey: 'sunglass', priceSoft: { currency: 'DRAGONBONE', amount: 15 } },
   { id: '20', sku: 'hat_fedora', name: '紳士帽', type: 'NON_CONSUMABLE', category: '服飾', iconKey: 'hat', priceSoft: { currency: 'DRAGONBONE', amount: 18 } },
+
+  { id: '201', sku: 'deco_rockHouse', name: '岩屋', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'deco_rockHouse', priceSoft: { currency: 'DRAGONBONE', amount: 30 } },
+  { id: '202', sku: 'deco_seaweed', name: '海草', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'deco_seaweed', priceSoft: { currency: 'DRAGONBONE', amount: 20 } },
+  { id: '203', sku: 'deco_shark', name: '鯊魚', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'deco_shark', priceSoft: { currency: 'DRAGONBONE', amount: 45 } },
+  { id: '204', sku: 'deco_shell', name: '貝殼', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'deco_shell', priceSoft: { currency: 'DRAGONBONE', amount: 25 } },
+  { id: '205', sku: 'deco_slide', name: '溜滑梯', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'deco_slide', priceSoft: { currency: 'DRAGONBONE', amount: 40 } },
+
 ];

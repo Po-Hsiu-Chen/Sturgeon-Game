@@ -101,6 +101,7 @@ export interface PlayerData {
     fashion: {
         owned: string[];           // 已擁有的時裝
     };
+    decorationsOwned?: string[];
     signInData: {
         weekly: {
             weekKey: string;               // 該週星期一
@@ -238,7 +239,8 @@ export class DataManager {
                 console.error(`取得玩家資料失敗: ${res.status} ${await res.text()}`);
                 return null;
             }
-            return await res.json();
+            const doc = await res.json();
+            return this._migratePlayerData(doc as PlayerData);
         } catch (e) {
             console.error('[getPlayerData] fetch 失敗：', e);
             return null;
@@ -536,11 +538,20 @@ export class DataManager {
         if (APPLY[sku]) {
             APPLY[sku](qty);
         } else {
-            const fashionId = FASHION_BY_SKU[sku] || sku; // 沒對應就保留原樣
-            if (pd.fashion.owned.indexOf(fashionId) === -1) {
-                pd.fashion.owned.push(fashionId);
+            // 裝飾（NON_CONSUMABLE）
+            if (sku.startsWith('deco_')) {
+                const set = new Set(pd.decorationsOwned ?? []);
+                set.add(sku);
+                pd.decorationsOwned = Array.from(set);
+            } else {
+                // 其餘仍視為時裝（維持既有邏輯）
+                const fashionId = FASHION_BY_SKU[sku] || sku; // 沒對應就保留原樣
+                if (pd.fashion.owned.indexOf(fashionId) === -1) {
+                    pd.fashion.owned.push(fashionId);
+                }
             }
         }
+
 
         const fresh = await this.savePlayerDataWithCache(pd);
         return fresh;
@@ -564,4 +575,19 @@ export class DataManager {
             }
         }
     }
+
+    private static _migratePlayerData(p: PlayerData): PlayerData {
+        // decorationsOwned 預設空陣列
+        if (!Array.isArray((p as any).decorationsOwned)) {
+            (p as any).decorationsOwned = [];
+        }
+        // 每個缸的 decorations 預設空陣列
+        if (Array.isArray(p.tankList)) {
+            for (const t of p.tankList) {
+                if (!Array.isArray(t.decorations)) t.decorations = [];
+            }
+        }
+        return p;
+    }
+
 }

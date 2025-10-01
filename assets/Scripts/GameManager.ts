@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, UITransform, Vec3, Button, SpriteFrame, ImageAsset, Texture2D, Color, UIOpacity } from 'cc';
+import { _decorator, Component, Node, Prefab, instantiate, Sprite, Label, UITransform, Vec3, Button, SpriteFrame, ImageAsset, Texture2D, Color, UIOpacity, resources } from 'cc';
 import { SwimmingFish } from './SwimmingFish';
 import { DataManager, FishData, PlayerData } from './DataManager';
 import { FishLogic } from './FishLogic';
@@ -8,6 +8,7 @@ import { showFloatingTextCenter } from './utils/UIUtils';
 import { initLiff, getIdentity } from './bridge/LiffBridge';
 import { authWithLine } from './api/Api';
 import { ConfirmDialogManager } from './ConfirmDialogManager';
+import { DecorationEditor } from './decoration/DecorationEditor';
 
 const { ccclass, property } = _decorator;
 
@@ -88,6 +89,9 @@ export class GameManager extends Component {
 
     @property(Label) tankFishCountLabel: Label = null!;         // 顯示魚數量/上限
 
+    @property(Button) decorEditBtn: Button = null!;         // 「裝飾」編輯按鈕（只在自己缸顯示）
+    @property(DecorationEditor) decorEditor: DecorationEditor = null!;
+
     private currentTankId: number = 1;                          // 當前魚缸 ID
     private offDMChange: (() => void) | null = null;
     private playerData: PlayerData | null = null;
@@ -113,6 +117,10 @@ export class GameManager extends Component {
         return form ? (map[form] ?? "未知型態") : "未知型態";
     }
 
+    /** 依裝飾 id 取 Prefab（交給 DecorationEditor 使用） */
+    public getDecorationPrefab(id: string) {
+        return (TankAssets.decorations?.get(id));
+    }
     // -----------------------------生命週期 / 啟動流程--------------------------------
     /** 初始化 */
     async start() {
@@ -135,6 +143,7 @@ export class GameManager extends Component {
                 const { lineUserId } = await authWithLine(idToken);
                 await DataManager.init(lineUserId);
             }
+            await this.preloadDecorationPrefabs();
             this.playerData = await DataManager.getPlayerDataCached();
             await this.initCapsAndRules();
 
@@ -216,6 +225,18 @@ export class GameManager extends Component {
         }
     }
 
+    private async preloadDecorationPrefabs() {
+        return new Promise<void>((resolve) => {
+            resources.loadDir('decorations', Prefab, (err, list) => {
+                if (!err && list) {
+                    list.forEach(pf => TankAssets.decorations.set(pf.name, pf)); // pf.name 就是 deco_xxx
+                } else {
+                    console.warn('[Decor] 沒載到 decorations：', err);
+                }
+                resolve();
+            });
+        });
+    }
     // -----------------------------UI 初始化--------------------------------
 
     /** 初始化所有按鈕事件 */
@@ -233,6 +254,16 @@ export class GameManager extends Component {
         this.fanBtn?.node.on(Node.EventType.TOUCH_END, () => this.onClickFan());
         this.brushBtn?.node.on(Node.EventType.TOUCH_END, () => this.onClickBrush());
 
+        this.decorEditBtn?.node.on(Node.EventType.TOUCH_END, async () => {
+            // 朋友缸/墓地不可編輯
+            if (this['isViewingFriend'] || this.tombTankNode?.active) {
+                showFloatingTextCenter(this.floatingNode, '此狀態不可編輯裝飾');
+                return;
+            }
+            // 進入編輯器（把目前缸 id 傳進去）
+            this.decorEditor?.enter?.(this, this['currentTankId']);
+        });
+
         // 返回按鈕
         this.backToMyTankBtn?.node.on(Node.EventType.TOUCH_END, () => this.backToMyTank());
 
@@ -240,6 +271,8 @@ export class GameManager extends Component {
         this.addFishBtn.node.on(Node.EventType.TOUCH_END, async () => {
             await this.onClickAddFish();
         });
+
+
     }
 
     /** 初始化面板事件與狀態 */
@@ -327,6 +360,7 @@ export class GameManager extends Component {
                 const prefab = TankAssets.decorations.get(d.id);
                 if (!prefab) continue;
                 const n = instantiate(prefab);
+                n.name = `Deco_${d.id}`;
                 n.setPosition(d.x ?? 0, d.y ?? 0, 0);
                 const sx = (d.flipX ? -1 : 1) * (d.scale ?? 1);
                 const sy = d.scale ?? 1;
@@ -443,7 +477,7 @@ export class GameManager extends Component {
         if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = true;
 
         // 換 header 後
-        this.applyFriendViewUI(true);  
+        this.applyFriendViewUI(true);
         this.updateTankButtons();
 
         const viewport = this.getActiveViewport();
@@ -564,14 +598,10 @@ export class GameManager extends Component {
 
     /** 依是否為朋友魚缸切換 UI 顯示/隱藏 */
     private applyFriendViewUI(isFriend: boolean) {
-        // 墓地按鈕 / 返回自己魚缸
         if (this.tombTankBtn) this.tombTankBtn.node.active = !isFriend;
         if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = isFriend;
-
-        // 簽到
+        if (this.decorEditBtn) this.decorEditBtn.node.active = !isFriend;
         if (this.singInBtn) this.singInBtn.node.active = !isFriend;
-
-        // 加魚 / 信箱
         if (this.addFishBtn) this.addFishBtn.node.active = !isFriend;
         if (this.mailBoxBtn) this.mailBoxBtn.node.active = !isFriend;
 
@@ -1306,5 +1336,6 @@ export class GameManager extends Component {
             this.switchTank(index + 1);
         }
     }
+
 
 }

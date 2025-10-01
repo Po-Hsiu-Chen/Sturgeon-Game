@@ -32,8 +32,11 @@ export class StoreState {
     this.wallet.DRAGONBONE = p.dragonBones ?? 0;
     this.events.emit('wallet:change');
 
-    // 擁有（非消耗：用時裝 owned 當示例；若你有外觀/家具等，也可併入）
-    this.owned = new Set(p.fashion?.owned ?? []);
+    // 擁有（非消耗）
+    this.owned = new Set([
+      ...(p.fashion?.owned ?? []),
+      ...(p.decorationsOwned ?? [])
+    ]);
     this.events.emit('owned:change');
 
     // 消耗品庫存（合併 feeds + items）
