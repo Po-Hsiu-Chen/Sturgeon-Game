@@ -144,6 +144,7 @@ export class GameManager extends Component {
                 await DataManager.init(lineUserId);
             }
             await this.preloadDecorationPrefabs();
+            await this.preloadBackgroundSpriteFrames();
             this.playerData = await DataManager.getPlayerDataCached();
             await this.initCapsAndRules();
 
@@ -417,6 +418,19 @@ export class GameManager extends Component {
         }
     }
 
+    /** 預載背景 */
+    private async preloadBackgroundSpriteFrames() {
+        return new Promise<void>((resolve) => {
+            resources.loadDir('backgrounds', SpriteFrame, (err, list) => {
+                if (!err && list) {
+                    list.forEach(sf => TankAssets.backgrounds.set(sf.name, sf)); // sf.name 如：bg_sandy
+                } else {
+                    console.warn('[BG] 沒載到 backgrounds：', err);
+                }
+                resolve();
+            });
+        });
+    }
 
     /** 顯示自己的缸 */
     async switchTank(tankId: number) {

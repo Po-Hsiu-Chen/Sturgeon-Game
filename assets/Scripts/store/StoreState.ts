@@ -25,7 +25,11 @@ export class StoreState {
     // 1) 訂閱 DataManager
     DataManager.onChange((p) => this.hydrateFromPlayer(p));
     // 2) 若已有登入，抓一次
-    DataManager.getPlayerDataCached().then(p => p && this.hydrateFromPlayer(p));
+    DataManager.getPlayerDataCached().then(p => {
+      if (p) {
+        this.hydrateFromPlayer(p);
+      }
+    });
   }
   private hydrateFromPlayer(p: PlayerData) {
     // 龍骨
@@ -121,4 +125,6 @@ export class StoreState {
     await DataManager.savePlayerDataWithCache(p);
     // hydrate 會自動同步
   }
+
+
 }

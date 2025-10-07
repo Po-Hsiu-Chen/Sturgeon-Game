@@ -31,4 +31,7 @@ export const MOCK_CATALOG: CatalogItem[] = [
   { id: '204', sku: 'deco_shell', name: '貝殼', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'deco_shell', priceSoft: { currency: 'DRAGONBONE', amount: 25 } },
   { id: '205', sku: 'deco_slide', name: '溜滑梯', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'deco_slide', priceSoft: { currency: 'DRAGONBONE', amount: 40 } },
 
+  { id: '304', sku: 'bg_azure', name: '晴藍海域背景', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'bg_azure', priceSoft: { currency: 'DRAGONBONE', amount: 70 } },
+  { id: '305', sku: 'bg_dream', name: '夢幻海洋背景', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'bg_dream', priceSoft: { currency: 'DRAGONBONE', amount: 80 } },
+
 ];

@@ -6,6 +6,7 @@ import { ItemCard } from './ItemCard';
 import { CategoryTab } from './CategoryTab';
 import { PurchaseModal } from './PurchaseModal';
 import { Toast } from './Toast';
+import { DataManager } from '../DataManager';
 
 const { ccclass, property } = _decorator;
 
@@ -34,16 +35,11 @@ export class StoreUI extends Component {
   private state = new StoreState();
 
   onLoad() {
-    this.toast?.show('測試', 0.8)
     this.state.setCatalog(MOCK_CATALOG);
 
-    // 先把 modal 關起來保險
     if (this.modal && this.modal.node) this.modal.node.active = false;
 
-    this.renderWallet();
-    this.setupCategoryButtons();
-    this.renderItems();
-
+    // 先綁事件，避免錯過 hydrate 的 owned:change
     this.state.events.on('wallet:change', this.renderWallet, this);
     this.state.events.on('owned:change', this.renderItems, this);
     this.state.events.on('inventory:change', this.renderItems, this);
@@ -51,6 +47,18 @@ export class StoreUI extends Component {
       this.updateCategoryVisuals();
       this.renderItems();
     }, this);
+
+    // 再做一次初始 UI（錢包、分類顏色）
+    this.renderWallet();
+    this.setupCategoryButtons();
+    this.updateCategoryVisuals();
+
+  }
+
+  onEnable() {
+    // 面板顯示當下再補一次（若此時 owned 已 hydrate，這次就會是正確狀態）
+    this.updateCategoryVisuals();
+    this.renderItems();
   }
 
   // 顯示錢包
@@ -165,8 +173,7 @@ export class StoreUI extends Component {
         this.toast?.show(`購買成功：\n${item.name}${qtyText}`);
       } else {
         const reason = res.reason === 'NOT_ENOUGH' ? '龍骨不足'
-          : res.reason === 'ALREADY_OWNED' ? '已擁有'
-            : '失敗';
+          : res.reason === 'ALREADY_OWNED' ? '已擁有' : '失敗';
         this.toast?.show(`購買失敗：${reason}`);
       }
     });

@@ -9,17 +9,17 @@ const { ccclass, property } = _decorator;
 
 @ccclass('PurchaseModal')
 export class PurchaseModal extends Component {
-  @property(Node)  panel: Node = null!;
+  @property(Node) panel: Node = null!;
 
   // 上半部資訊
   @property(Sprite) icon: Sprite = null!;
-  @property(Label)  nameLabel: Label = null!;
-  @property(Label)  ownedLabel: Label = null!;
+  @property(Label) nameLabel: Label = null!;
+  @property(Label) ownedLabel: Label = null!;
 
   // 中段數量/價格
-  @property(Label)  qtyLabel: Label = null!;
-  @property(Label)  haveLabel: Label = null!;
-  @property(Label)  needLabel: Label = null!;
+  @property(Label) qtyLabel: Label = null!;
+  @property(Label) haveLabel: Label = null!;
+  @property(Label) needLabel: Label = null!;
 
   // 數量控制
   @property(Button) minBtn: Button = null!;
@@ -29,22 +29,22 @@ export class PurchaseModal extends Component {
 
   // 底部按鈕
   @property(Button) confirmBtn: Button = null!;
-  @property(Button) cancelBtn:  Button = null!;
-  @property(Button) closeBtn:   Button = null!;   // 右上角 X
+  @property(Button) cancelBtn: Button = null!;
+  @property(Button) closeBtn: Button = null!;   // 右上角 X
 
   private state!: StoreState;
   private item!: CatalogItem;
   private qty = 1;
-  private onConfirm: ((qty:number)=>void) | null = null;
+  private onConfirm: ((qty: number) => void) | null = null;
 
   /** 打開：把狀態&商品塞進來，並套 UI */
-  open(state: StoreState, item: CatalogItem, onConfirm: (qty:number)=>void) {
+  open(state: StoreState, item: CatalogItem, onConfirm: (qty: number) => void) {
     this.state = state;
     this.item = item;
     this.onConfirm = onConfirm;
 
     // 名稱 / 已擁有
-    if (this.nameLabel)  this.nameLabel.string = item.name ?? '';
+    if (this.nameLabel) this.nameLabel.string = item.name ?? '';
     const owned = item.type === 'CONSUMABLE'
       ? state.getCount(item.sku)
       : (state.isOwned(item.sku) ? 1 : 0);
@@ -52,33 +52,26 @@ export class PurchaseModal extends Component {
 
     // 圖片
     if (this.icon && item.iconKey) {
-      resources.load(`icons/${item.iconKey}/spriteFrame`, SpriteFrame, (err, sf) => {
-        if (!err && sf) {
-          this.icon.spriteFrame = sf;
+      this.loadIconSpriteFrame(item.iconKey, (sf) => {
+        if (!sf) return;
+        this.icon.spriteFrame = sf;
 
-          // 1) 確保不被九宮格/平鋪影響
-          this.icon.type = Sprite.Type.SIMPLE;
+        // 下面保留你原本的型態/尺寸設定（避免變形）：
+        this.icon.type = Sprite.Type.SIMPLE;
+        this.icon.sizeMode = Sprite.SizeMode.RAW;
 
-          // 2) 不用 CUSTOM，改用 RAW（或 TRIMMED）
-          this.icon.sizeMode = Sprite.SizeMode.RAW; // 或 Sprite.SizeMode.TRIMMED
-
-          // 3) 若外層或自己有 Widget 在拉伸，先關掉四邊同時對齊
-          const widget = this.icon.getComponent(Widget);
-          if (widget) {
-            widget.isAlignLeft = widget.isAlignRight = false;
-            widget.isAlignTop = widget.isAlignBottom = false;
-          }
-
-          // 4) 如需把圖塞進一個最大方框，請「等比」縮放 contentSize
-          const ui = this.icon.getComponent(UITransform)!;
-          const rawW = sf.getRect().width;
-          const rawH = sf.getRect().height;
-
-          // 設定你要塞進去的最大框（例：120x120）
-          const maxW = 120, maxH = 120;
-          const scale = Math.min(maxW / rawW, maxH / rawH, 1); // 不放大，只縮小
-          ui.setContentSize(new Size(Math.round(rawW * scale), Math.round(rawH * scale)));
+        const widget = this.icon.getComponent(Widget);
+        if (widget) {
+          widget.isAlignLeft = widget.isAlignRight = false;
+          widget.isAlignTop = widget.isAlignBottom = false;
         }
+
+        const ui = this.icon.getComponent(UITransform)!;
+        const rawW = sf.getRect().width;
+        const rawH = sf.getRect().height;
+        const maxW = 120, maxH = 120;
+        const scale = Math.min(maxW / rawW, maxH / rawH, 1);
+        ui.setContentSize(new Size(Math.round(rawW * scale), Math.round(rawH * scale)));
       });
     }
 
@@ -110,22 +103,39 @@ export class PurchaseModal extends Component {
   private refresh(): void {
     const have = this.state.wallet.DRAGONBONE;
     const price = this.unitPrice();
-    const need  = price * this.qty;
+    const need = price * this.qty;
 
-    if (this.qtyLabel)  this.qtyLabel.string  = String(this.qty);
+    if (this.qtyLabel) this.qtyLabel.string = String(this.qty);
     if (this.haveLabel) this.haveLabel.string = have.toString();
     if (this.needLabel) this.needLabel.string = need.toString();
 
     const isNCBlocked = this.item.type !== 'CONSUMABLE' && this.state.isOwned(this.item.sku);
     const maxQ = this.maxAffordable() || 1;
 
-    if (this.minBtn)   this.minBtn.interactable   = this.qty > 1;
+    if (this.minBtn) this.minBtn.interactable = this.qty > 1;
     if (this.minusBtn) this.minusBtn.interactable = this.qty > 1;
-    if (this.plusBtn)  this.plusBtn.interactable  = this.qty < maxQ;
-    if (this.maxBtn)   this.maxBtn.interactable   = this.qty < maxQ;
+    if (this.plusBtn) this.plusBtn.interactable = this.qty < maxQ;
+    if (this.maxBtn) this.maxBtn.interactable = this.qty < maxQ;
 
     const canConfirm = !isNCBlocked && have >= need && this.qty >= 1;
     if (this.confirmBtn) this.confirmBtn.interactable = canConfirm;
+  }
+
+  private loadIconSpriteFrame(iconKey: string, cb: (sf: SpriteFrame | null) => void) {
+    resources.load(`icons/${iconKey}/spriteFrame`, SpriteFrame, (err, sf) => {
+      if (!err && sf) return cb(sf);
+
+      resources.load(`icons/${iconKey}`, SpriteFrame, (err2, sf2) => {
+        if (!err2 && sf2) return cb(sf2);
+
+        resources.load(`backgrounds/${iconKey}/spriteFrame`, SpriteFrame, (e1, sf1) => {
+          if (!e1 && sf1) return cb(sf1);
+          resources.load(`backgrounds/${iconKey}`, SpriteFrame, (e2, sf2) => {
+            cb(e2 ? null : sf2);
+          });
+        });
+      });
+    });
   }
 
   // ===== Button Handlers =====
@@ -136,7 +146,7 @@ export class PurchaseModal extends Component {
 
   onClickConfirm(): void { this.onConfirm?.(this.qty); this.hide(); }
   onClickCancel(): void { this.hide(); }
-  onClickClose(): void  { this.hide(); }
+  onClickClose(): void { this.hide(); }
   onClickBackdrop(): void { this.hide(); } // 想點遮罩也能關，就把 Mask 的 Button 綁這個
 
   /** 退場 */

@@ -539,7 +539,7 @@ export class DataManager {
             APPLY[sku](qty);
         } else {
             // 裝飾（NON_CONSUMABLE）
-            if (sku.startsWith('deco_')) {
+            if (sku.startsWith('deco_') || sku.startsWith('bg_')) {
                 const set = new Set(pd.decorationsOwned ?? []);
                 set.add(sku);
                 pd.decorationsOwned = Array.from(set);
