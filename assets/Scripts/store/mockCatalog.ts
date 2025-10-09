@@ -31,6 +31,10 @@ export const MOCK_CATALOG: CatalogItem[] = [
   { id: '204', sku: 'deco_shell', name: '貝殼', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'deco_shell', priceSoft: { currency: 'DRAGONBONE', amount: 25 } },
   { id: '205', sku: 'deco_slide', name: '溜滑梯', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'deco_slide', priceSoft: { currency: 'DRAGONBONE', amount: 40 } },
 
+  { id: '206', sku: 'deco_light_blue',   name: '藍光', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'light_blue_icon',   priceSoft: { currency: 'DRAGONBONE', amount: 15 } },
+  { id: '207', sku: 'deco_light_pink',   name: '粉光', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'light_pink_icon',   priceSoft: { currency: 'DRAGONBONE', amount: 15 } },
+  { id: '208', sku: 'deco_light_yellow', name: '黃光', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'light_yellow_icon', priceSoft: { currency: 'DRAGONBONE', amount: 15 } },
+
   { id: '304', sku: 'bg_azure', name: '晴藍海域背景', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'bg_azure', priceSoft: { currency: 'DRAGONBONE', amount: 70 } },
   { id: '305', sku: 'bg_dream', name: '夢幻海洋背景', type: 'NON_CONSUMABLE', category: '裝飾', iconKey: 'bg_dream', priceSoft: { currency: 'DRAGONBONE', amount: 80 } },
 

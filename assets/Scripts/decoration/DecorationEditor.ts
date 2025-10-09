@@ -38,6 +38,7 @@ export class DecorationEditor extends Component {
     private currentBgId: string = 'bg_default';
     private isBgSku(sku: string) { return sku.startsWith('bg_') || sku === 'bg_default'; }
     private isDecoSku(sku: string) { return sku.startsWith('deco_'); }
+    private isLightSku = (sku: string) => sku.startsWith('deco_light_');
 
     onLoad() {
         if (this.panel) this.panel.active = false;
@@ -69,13 +70,16 @@ export class DecorationEditor extends Component {
         }
         this.decoLayer = layer;
 
-        // 確保每個子物件都有 DecorationItem，名稱補上前綴
         for (const child of this.decoLayer.children) {
-            if (!child.getComponent(DecorationItem)) child.addComponent(DecorationItem);
+            const pureId = child.name.replace(/^Deco_/, '');
+            if (!this.isLightSku(pureId)) {
+                if (!child.getComponent(DecorationItem)) child.addComponent(DecorationItem);
+            }
             if (!child.name.startsWith(DECORATION_PREFIX)) {
                 child.name = `${DECORATION_PREFIX}${child.name}`;
             }
         }
+
 
         this.decoLayer.on(Node.EventType.CHILD_ADDED, this.updatePaletteLockState, this);
         this.decoLayer.on(Node.EventType.CHILD_REMOVED, this.updatePaletteLockState, this);
@@ -172,15 +176,41 @@ export class DecorationEditor extends Component {
                     btn.node.on(Node.EventType.TOUCH_END, () => this.applyBackground(sku), this);
                     opa.opacity = (sku === this.currentBgId) ? 255 : 120; // 選中高亮，其餘半透明
                 } else {
-                    // 裝飾邏輯：已放上的不可再放
-                    const already = this.hasDecoration(sku);
-                    btn.interactable = !already;
-                    btn.node.on(Node.EventType.TOUCH_END, () => this.spawnItem(sku, 0, 0), this);
-                    opa.opacity = already ? 120 : 255;
+                    if (this.isLightSku(sku)) {
+                        btn.interactable = true;
+                        btn.node.on(Node.EventType.TOUCH_END, () => this.applyLight(sku), this);
+                        // 透明度由是否為目前使用中決定
+                        opa.opacity = this.hasDecoration(sku) ? 255 : 120;
+                    } else {
+                        // 原本裝飾（可拖曳）的流程
+                        const already = this.hasDecoration(sku);
+                        btn.interactable = !already;
+                        btn.node.on(Node.EventType.TOUCH_END, () => this.spawnItem(sku, 0, 0), this);
+                        opa.opacity = already ? 120 : 255;
+                    }
                 }
             })
         );
 
+    }
+
+    // 只允許單一燈光存在
+    private applyLight(lightSku: string) {
+        // 1) 先移除任何已存在的燈光
+        for (const ch of [...this.decoLayer.children]) {
+            const id = ch.name.replace(/^Deco_/, '');
+            if (this.isLightSku(id)) ch.destroy();
+        }
+        // 2) 加入新的燈光（固定在視窗中央、不可拖曳）
+        const prefab = this.gm.getDecorationPrefab(lightSku) as Prefab | null | undefined;
+        if (!prefab) return;
+
+        const n = instantiate(prefab);
+        n.name = `${DECORATION_PREFIX}${lightSku}`;
+        // 視需要：鋪滿或固定位置；一般燈光 prefab 做滿版，不用動
+        this.decoLayer.addChild(n);
+        // 不綁 DecorationItem，即不可拖曳/縮放
+        this.updatePaletteLockState();
     }
 
     /** 依當前 DecoLayer 狀態，更新 Palette 卡片互動/透明度 */
@@ -192,7 +222,12 @@ export class DecorationEditor extends Component {
             const kind = (card as any).__kind as 'bg' | 'deco';
             const btn = card.getComponent(Button) ?? card.addComponent(Button);
             const opa = card.getComponent(UIOpacity) ?? card.addComponent(UIOpacity);
-
+            if (this.isLightSku(sku)) {
+                const selected = this.hasDecoration(sku);
+                btn.interactable = !selected; // 已選中的保持半透明，不可再次點
+                opa.opacity = selected ? 255 : 120;
+                continue;
+            }
             if (kind === 'bg') {
                 btn.interactable = true;
                 opa.opacity = (sku === this.currentBgId) ? 120 : 255; // 使用中半透明，未使用不透明
