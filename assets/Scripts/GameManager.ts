@@ -9,6 +9,7 @@ import { initLiff, getIdentity } from './bridge/LiffBridge';
 import { authWithLine } from './api/Api';
 import { ConfirmDialogManager } from './ConfirmDialogManager';
 import { DecorationEditor } from './decoration/DecorationEditor';
+import { FishFamilyService, IGameAdapter } from "./marry/FishFamilyService";
 
 const { ccclass, property } = _decorator;
 
@@ -98,6 +99,7 @@ export class GameManager extends Component {
     private isViewingFriend = false;
     private viewingFriend: Pick<PlayerData, 'tankList' | 'fishList' | 'tankEnvironment' | 'userId' | 'displayName'> | null = null;
     private lastNoticeType: 'none' | 'death' | 'env' = 'none';
+    private family!: FishFamilyService;
 
     // 第六階成魚型態的順序（要和 Inspector 中兩個 Prefab 陣列順序完全一致）
     private readonly ADULT_FORM_ORDER: FishData["adultForm"][] = [
@@ -122,7 +124,103 @@ export class GameManager extends Component {
         return (TankAssets.decorations?.get(id));
     }
     // -----------------------------生命週期 / 啟動流程--------------------------------
-    /** 初始化 */
+    async onLoad() {
+        // === Marriage/Breeding Adapter START ===
+        const adapter: IGameAdapter = {
+            // 1) 回傳我的玩家資料
+            getMyPlayer: () => this.playerData!,
+
+            // 2) 由 gameId 取得玩家（好友）。如果你有好友快取，就從那裡取；沒有就先回 null。
+            getPlayerByGameId: (gameId: string) => {
+                // TODO: 若你有 this.viewingFriend 或快取列表，從那裡找；先放 null 代表改用寄信派送
+                return null;
+            },
+
+            // 3) 存檔
+            saveMyPlayer: async (reason: string) => {
+                await DataManager.savePlayerDataWithCache(this.playerData);
+            },
+
+            // 4) 吐司提示
+            toast: (msg: string) => {
+                showFloatingTextCenter(this.floatingNode, msg);
+            },
+
+            // 5) 目前操作的魚缸 id（你現有切換邏輯的當前缸）
+            getCurrentTankId: () => this.currentTankId,
+
+            // 6) 加一條寶寶魚到指定玩家的指定缸
+            //    你目前只能直接改自己，所以這裡只處理自己；跨玩家用寄信派送（見 enqueueMailFor）
+            addBabyFishToTank: async (targetOwnerGameId: string, tankId: number) => {
+                if (targetOwnerGameId !== this.playerData!.gameId) {
+                    // 現階段不直接改好友：交給 enqueueMailFor 用系統信通知他領取
+                    return -1;
+                }
+                // 你現有的生魚流程：cost 必須是 0（因為服務層已扣 50 龍骨）
+                await this.commitAddFish(tankId, 0, "恭喜～魚寶寶誕生啦！");
+                // 如果 commitAddFish 有回傳新魚 id 就回傳；沒有就暫時回 -1
+                return -1;
+            },
+
+            // 7) 計算某玩家的所有魚缸空位總數
+            countEmptySlots: (owner: PlayerData) => {
+                let total = 0;
+                for (const t of owner.tankList) {
+                    const cap = t.capacity ?? (t.id === 1 ? 3 : 6);
+                    const alive = t.fishIds
+                        .map(id => owner.fishList.find(f => f.id === id))
+                        .filter((f): f is FishData => !!f && !f.isDead).length;
+                    total += Math.max(0, cap - alive);
+                }
+                return total;
+            },
+
+            // 8) 是否允許直接改好友存檔（多數情況 false → 用寄信派送）
+            canMutateOtherPlayer: (gameId: string) => {
+                return false;
+            },
+
+            // 寄系統信（讓好友上線時領寶寶或套用婚姻）
+            enqueueMailFor: async (gameId: string, subject: string, payload: any) => {
+                // TODO: 這裡接你現有的 Mail 系統；先留白不影響本地測試
+                // await DataManager.sendMail({ to: gameId, subject, payload });
+            },
+        };
+        // 建立服務實例
+        this.family = new FishFamilyService(adapter);
+
+        this.initFamilyService();
+
+    }
+
+
+    private initFamilyService() {
+        const adapter: IGameAdapter = {
+            getMyPlayer: () => this.playerData!,
+            getPlayerByGameId: (_gameId: string) => null, // 先不接好友
+            saveMyPlayer: async () => { await DataManager.savePlayerDataWithCache(this.playerData); },
+            toast: (msg: string) => { showFloatingTextCenter(this.floatingNode, msg); },
+            getCurrentTankId: () => this.currentTankId,
+            addBabyFishToTank: async (_ownerGameId: string, tankId: number) => {
+                await this.commitAddFish(tankId, 0, "魚寶寶誕生啦！");
+                return -1;
+            },
+            countEmptySlots: (owner: PlayerData) => {
+                let total = 0;
+                for (const t of owner.tankList) {
+                    const cap = t.capacity ?? (t.id === 1 ? 3 : 6);
+                    const alive = t.fishIds
+                        .map(id => owner.fishList.find(f => f.id === id))
+                        .filter((f): f is FishData => !!f && !f.isDead).length;
+                    total += Math.max(0, cap - alive);
+                }
+                return total;
+            },
+            canMutateOtherPlayer: () => false,
+            enqueueMailFor: async () => { },
+        };
+        this.family = new FishFamilyService(adapter);
+    }
     async start() {
         const urlParams = new URLSearchParams(window.location.search);
         const forceDev = urlParams.get('dev') === '1';
@@ -673,6 +771,12 @@ export class GameManager extends Component {
                 fish.emotion = "dead";
                 deadFishNames.push(fish.name);
                 console.log(`${fish.name} 因飢餓過久而死亡`);
+
+                // 當某魚死亡後：
+                const deadFish = fish;
+                this.family.dissolveOnDeath(deadFish);
+                await DataManager.savePlayerDataWithCache(this.playerData);
+
                 continue;
             }
 
@@ -1351,5 +1455,20 @@ export class GameManager extends Component {
         }
     }
 
+    public async marryFish(myFishId: number, partnerFishId: number, partnerOwnerGameId: string) {
+        console.log("[GM] marryFish", { myFishId, partnerFishId, partnerOwnerGameId });
+        const ok = await this.family.marry(myFishId, this.playerData!.gameId, partnerFishId, partnerOwnerGameId);
+        if (ok) {
+            this.node.emit('marriage-updated', { fishId: myFishId, spouseId: partnerFishId });
+        }
+    }
 
+    public async breedFish(myFishId: number) {
+        console.log("[GM] breedFish", { myFishId });
+        await this.family.breed(myFishId);
+    }
+
+
+    public getMyPlayer(): PlayerData { return this.playerData!; }
+    public getCurrentTankId(): number { return this.currentTankId; }
 }

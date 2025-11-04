@@ -1,5 +1,5 @@
 import { _decorator, Component, Node, EditBox, Label, Prefab, instantiate, Button, Sprite, SpriteFrame, Texture2D, ImageAsset, Color } from 'cc';
-import { DataManager } from './DataManager';
+import { DataManager, FishData, PlayerData } from './DataManager';
 import { GameManager } from './GameManager';
 import { showFloatingTextCenter } from './utils/UIUtils';
 import { ConfirmDialogManager } from './ConfirmDialogManager';
@@ -33,6 +33,7 @@ export class FriendPanel extends Component {
     @property(Prefab) searchRowPrefab: Prefab = null!;
 
     private currentTab: TabKind = TabKind.Friends; // 預設顯示「我的好友」
+    private _friends: PlayerData[] = [];
 
     onEnable() {
         this.bindEvents();
@@ -43,8 +44,28 @@ export class FriendPanel extends Component {
         this.unbindEvents();
     }
 
-    /** 初始化 */
-    start() {
+
+    /** 由你現有的載入流程呼叫，或你把 UI 生成時的資料塞進來 */
+    public setFriends(list: PlayerData[]) {
+        this._friends = list ?? [];
+    }
+
+    /** 給外部（FishDetailManager）取用所有好友 PlayerData */
+    public getAllFriendPlayerData(): PlayerData[] {
+        return this._friends ?? [];
+    }
+
+    /** 直接回傳「可結婚的好友魚」清單（未死、未婚、LV≥6） */
+    public getFriendMarriageCandidates(): { ownerGameId: string, fish: FishData }[] {
+        const out: { ownerGameId: string, fish: FishData }[] = [];
+        for (const friend of (this._friends ?? [])) {
+            for (const f of friend.fishList ?? []) {
+                if (!f.isDead && !f.isMarried && (f.stage ?? 0) >= 6) {
+                    out.push({ ownerGameId: friend.gameId, fish: f });
+                }
+            }
+        }
+        return out;
     }
 
     /** 事件綁定 */
@@ -442,5 +463,6 @@ export class FriendPanel extends Component {
     private getDisplayId(u: { gameId?: string; userId: string }): string {
         return (u.gameId && String(u.gameId)) || u.userId;
     }
+
 
 }

@@ -38,6 +38,8 @@ export interface FishData {
     deathDate?: string;                  // 死掉時間
     tankId: number;                      // 所在魚缸          
     adultForm?: "form1" | "form2" | "form3" | "form4";           // 成魚(第六階)形態
+    spouseOwnerGameId?: string | null;  // 配偶所屬玩家（自己/好友），自己可寫 this.playerData.gameId
+    marriedAt?: string | null;          // ISO 時間字串，何時結婚（用於未來統計、任務等）
 }
 
 /** 魚缸環境狀態 */

@@ -6,21 +6,23 @@ import { DataManager, FishData } from './DataManager';
 import { playOpenPanelAnim, showFloatingTextCenter } from './utils/UIUtils';
 import { ConfirmDialogManager } from './ConfirmDialogManager';
 import { FashionManager } from './FashionManager';
+import { ChoosePartnerDialog } from "./marry/ChoosePartnerDialog";
+import { FriendPanel } from './FriendPanel';
 
 const { ccclass, property } = _decorator;
 
 type FashionSlot = 'head';
 const FASHION_CATALOG: Record<string, { slot: FashionSlot; name: string; iconIndex: number }> = {
-  acc_bowtie:   { slot:'head', name:'蝴蝶結',   iconIndex: 0 },
-  hat_chef:     { slot:'head', name:'廚師帽',   iconIndex: 1 },
-  hat_fedora:   { slot:'head', name:'紳士帽',   iconIndex: 2 },
-  acc_sunglass: { slot:'head', name:'墨鏡',     iconIndex: 3 },
-  hat_crown:        { slot:'head', name:'皇冠',       iconIndex: 4 },
-  acc_flower:       { slot:'head', name:'花環',       iconIndex: 5 },
-  acc_heart_glass:  { slot:'head', name:'愛心眼鏡',   iconIndex: 6 },
-  hat_magic:        { slot:'head', name:'魔法帽',     iconIndex: 7 },
-  hat_beret:        { slot:'head', name:'畫家帽',     iconIndex: 8 },
-  hat_party:        { slot:'head', name:'派對帽',     iconIndex: 9 },
+    acc_bowtie: { slot: 'head', name: '蝴蝶結', iconIndex: 0 },
+    hat_chef: { slot: 'head', name: '廚師帽', iconIndex: 1 },
+    hat_fedora: { slot: 'head', name: '紳士帽', iconIndex: 2 },
+    acc_sunglass: { slot: 'head', name: '墨鏡', iconIndex: 3 },
+    hat_crown: { slot: 'head', name: '皇冠', iconIndex: 4 },
+    acc_flower: { slot: 'head', name: '花環', iconIndex: 5 },
+    acc_heart_glass: { slot: 'head', name: '愛心眼鏡', iconIndex: 6 },
+    hat_magic: { slot: 'head', name: '魔法帽', iconIndex: 7 },
+    hat_beret: { slot: 'head', name: '畫家帽', iconIndex: 8 },
+    hat_party: { slot: 'head', name: '派對帽', iconIndex: 9 },
 };
 
 @ccclass('FishDetailManager')
@@ -39,6 +41,7 @@ export class FishDetailManager extends Component {
     @property(Label) hungerLabel: Label = null!;
     @property(Sprite) fishStatusImage: Sprite = null!;
     @property(Label) floatingText: Label = null!;
+    @property(Label) marriageLabel: Label = null!;
 
     // TabButton
     @property([Node]) tabButtons: Node[] = []; // 依序放：Feed / Heal / Fashion
@@ -84,14 +87,32 @@ export class FishDetailManager extends Component {
     @property(Node) renameConfirmButton: Node = null!;
     @property(Node) renameCancelButton: Node = null!;
 
+    @property(Node) chooseDialogNode: Node = null!;   // 選擇對象的對話框節點（Prefab 實例）
+    @property(GameManager) gameManager: GameManager = null!; // 場景上的 GameManager
+
+
     private currentFishId: number = -1;
     private isReadOnly: boolean = false;
     private _currentTab: 'feed' | 'heal' | 'fashion' = 'feed';
     private _tabKeys: Array<'feed' | 'heal' | 'fashion'> = ['feed', 'heal', 'fashion'];
     private _tabSections!: Record<'feed' | 'heal' | 'fashion', Node>;
+    private chooseDialog!: ChoosePartnerDialog;
+
+    onLoad() {
+        this.chooseDialog = this.chooseDialogNode.getComponent(ChoosePartnerDialog)!;
+
+        const gm = this.node.scene.getComponentInChildren(GameManager);
+        gm?.node.on('marriage-updated', async (e: { fishId: number; spouseId: number }) => {
+            // 只有當前面板正在觀看的 fish 受到這次結婚影響，才刷新
+            if (!e || (this.currentFishId !== e.fishId && this.currentFishId !== e.spouseId)) return;
+
+            const pd = await DataManager.getPlayerDataCached({ refresh: true }); // 一定強刷
+            const fresh = pd.fishList.find(f => f.id === this.currentFishId);
+            if (fresh) this.showFishDetail(fresh, undefined, { preserveTab: true });
+        });
+    }
 
 
-    /** 初始化 */
     start() {
         SwimmingFish.setEmotionFrames({
             happy: this.happySprite,
@@ -145,6 +166,11 @@ export class FishDetailManager extends Component {
         emotionSprite?: SpriteFrame | null,
         opts?: { readOnly?: boolean; preserveTab?: boolean }
     ) {
+        // 先強制抓最新資料，再用 id 回填最新的 fish 物件
+        const latestPD = await DataManager.getPlayerDataCached({ refresh: true });
+        const latest = latestPD.fishList.find(f => f.id === fish.id);
+        if (latest) fish = latest;
+
         playOpenPanelAnim(this.fishDetailPanel);
         this.currentFishId = fish.id;
 
@@ -162,6 +188,15 @@ export class FishDetailManager extends Component {
         this.daysLabel.string = `已成長天數：${fish.growthDaysPassed}`;
         this.stageLabel.string = `LV ${fish.stage}`;
         this.hungerLabel.string = `飢餓值：${Math.floor(fish.hunger)} / 100`;
+
+        const me = latestPD; // 重用前面 refresh 後的最新資料
+        let spouseName = '';
+        if (fish.isMarried && fish.spouseId != null && fish.spouseOwnerGameId === me.gameId) {
+            spouseName = me.fishList.find(ff => ff.id === fish.spouseId)?.name ?? '';
+        }
+        this.marriageLabel.string = fish.isMarried
+            ? `婚姻：已結婚${spouseName ? `（對象：${spouseName}）` : ''}`
+            : `婚姻：未結婚`;
 
         // 分頁可見性/互動（朋友缸：只留 Feed）
         const canUseHeal = !this.isReadOnly;
@@ -611,4 +646,47 @@ export class FishDetailManager extends Component {
             this.fashionGrid.addChild(card);
         }
     }
+
+    private async onClickMarry() {
+        console.log("[MarryClick] onClickMarry 被按下, currentFishId =", this.currentFishId);
+        if (this.currentFishId < 0) return;
+
+        const { fish } = await this.getCurrentFishAndPlayer();
+        if (!fish) return;
+
+        // 已婚 → 直接提示，不開面板
+        if (fish.isMarried) {
+            showFloatingTextCenter(this.floatingNode, "這條魚已經結婚囉 💍");
+            return;
+        }
+        // LV < 6 → 不可結婚
+        if ((fish.stage ?? 0) < 6) {
+            showFloatingTextCenter(this.floatingNode, "需要達到第 6 階才能結婚！");
+            return;
+        }
+        // 死亡防呆
+        if (fish.isDead) {
+            showFloatingTextCenter(this.floatingNode, "這條魚已經死亡，無法結婚。");
+            return;
+        }
+
+        // 一次拿到所有好友的可結婚魚
+        const friendPanel = this.node.scene.getComponentInChildren(FriendPanel);
+        const candidates = friendPanel?.getFriendMarriageCandidates
+            ? friendPanel.getFriendMarriageCandidates()
+            : [];
+
+        // 設定給對話框（FriendTab 會直接顯示所有好友候選）
+        this.chooseDialog.setFriendCandidatesProvider(() => candidates);
+
+        // 打開選擇視窗（MyTab + FriendTab）
+        this.chooseDialog.openFor(this.currentFishId);
+    }
+
+    private async onClickBreed() {
+        if (this.currentFishId < 0) return;
+        await this.gameManager.breedFish(this.currentFishId);
+    }
+
+
 }
