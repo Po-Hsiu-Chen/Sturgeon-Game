@@ -1,595 +1,619 @@
-import { _decorator, Component, Node } from 'cc';
-import { quizQuestions } from './quiz/QuizData';
+import { _decorator, Component, Node } from "cc";
+import { quizQuestions } from "./quiz/QuizData";
 const { ccclass, property } = _decorator;
 
 // -------- 資料結構定義 --------
 
 /** 魚的即時狀態 */
 interface FishStatus {
-    hungry: boolean;   // 是否飢餓
-    hot: boolean;      // 是否太熱
-    cold: boolean;     // 是否太冷
-    sick: boolean;     // 是否生病
+  hungry: boolean; // 是否飢餓
+  hot: boolean; // 是否太熱
+  cold: boolean; // 是否太冷
+  sick: boolean; // 是否生病
 }
 
 /** 時裝 */
 interface FishOutfit {
-    head: string | null;         // 頭
-    accessories: string[];       // 其他
+  head: string | null; // 頭
+  accessories: string[]; // 其他
 }
 
 /** 魚的完整資料 */
 export interface FishData {
-    id: number;                          // 魚 ID
-    name: string;                        // 名字
-    gender: "male" | "female";           // 性別
-    stage: number;                       // 成長階段（1 = 魚卵）
-    growthDaysPassed: number;            // 已經經過的天數
-    lastFedDate: string;                 // 最後一次被餵的時間
-    hunger: number;                      // 飢餓值（0 = 飽）
-    hungerRateMultiplier: number;        // 飢餓速度倍率
-    appearance: "ugly" | "beautiful";    // 外觀美醜
-    outfit: FishOutfit;                  // 時裝資訊
-    isMarried: boolean;                  // 是否已婚
-    spouseId: number | null;             // 配偶 ID
-    status: FishStatus;                  // 即時狀態
-    emotion: "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "dead" | "sick";  // 情緒狀態
-    isDead: boolean;                     // 是否死了
-    deathDate?: string;                  // 死掉時間
-    tankId: number;                      // 所在魚缸          
-    adultForm?: "form1" | "form2" | "form3" | "form4";           // 成魚(第六階)形態
-    spouseOwnerGameId?: string | null;  // 配偶所屬玩家（自己/好友），自己可寫 this.playerData.gameId
-    marriedAt?: string | null;          // ISO 時間字串，何時結婚（用於未來統計、任務等）
+  id: number; // 魚 ID
+  name: string; // 名字
+  gender: "male" | "female"; // 性別
+  stage: number; // 成長階段（1 = 魚卵）
+  growthDaysPassed: number; // 已經經過的天數
+  lastFedDate: string; // 最後一次被餵的時間
+  hunger: number; // 飢餓值（0 = 飽）
+  hungerRateMultiplier: number; // 飢餓速度倍率
+  appearance: "ugly" | "beautiful"; // 外觀美醜
+  outfit: FishOutfit; // 時裝資訊
+  isMarried: boolean; // 是否已婚
+  spouseId: number | null; // 配偶 ID
+  status: FishStatus; // 即時狀態
+  emotion: "happy" | "sad" | "angry" | "hungry" | "cold" | "hot" | "dead" | "sick"; // 情緒狀態
+  isDead: boolean; // 是否死了
+  deathDate?: string; // 死掉時間
+  tankId: number; // 所在魚缸
+  adultForm?: "form1" | "form2" | "form3" | "form4"; // 成魚(第六階)形態
+  spouseOwnerGameId?: string | null; // 配偶所屬玩家（自己/好友），自己可寫 this.playerData.gameId
+  marriedAt?: string | null; // ISO 時間字串，何時結婚（用於未來統計、任務等）
 }
 
 /** 魚缸環境狀態 */
 export interface TankEnvironment {
-    temperature: number;                    // 當前水溫（°C）
-    lastTempUpdateTime: string;             // 上次更新水溫的時間
-    waterQualityStatus: "clean" | "dirty";  // 水質狀態
-    lastCleanTime: string;                  // 上次清理時間
-    isTemperatureDanger: boolean;           // 是否水溫異常（登入後根據時間計算）
-    loginDaysSinceClean: number;            // 清缸後累積的登入天數
-    badEnvLoginDays: number;                // 連續壞環境的登入天數
+  temperature: number; // 當前水溫（°C）
+  lastTempUpdateTime: string; // 上次更新水溫的時間
+  waterQualityStatus: "clean" | "dirty"; // 水質狀態
+  lastCleanTime: string; // 上次清理時間
+  isTemperatureDanger: boolean; // 是否水溫異常（登入後根據時間計算）
+  loginDaysSinceClean: number; // 清缸後累積的登入天數
+  badEnvLoginDays: number; // 連續壞環境的登入天數
 }
 
 /** 魚缸 */
 export interface TankData {
-    id: number;               // 魚缸 ID
-    name: string;             // 魚缸名稱
-    capacity?: number;        // 魚缸容量  
-    comfort: number;          // 舒適度（0~100 暫定）
-    fishIds: number[];        // 此魚缸內的魚 ID 陣列
-    backgroundId?: string;    // 背景樣式，例如 'bg_coral_01'
-    decorations?: Array<{
-        id: string;           // 裝飾資產 id，例如 'deco_shell_02'
-        x: number;            // 位置（以 UITransform 左上為原點或中心，固定一種）
-        y: number;
-        scale?: number;       // 預設 1
-        rotation?: number;    // 預設 0
-        zIndex?: number;      // 圖層順序，預設 0（背景前/魚後等可自訂）
-        flipX?: boolean;      // 可選
-    }>;
+  id: number; // 魚缸 ID
+  name: string; // 魚缸名稱
+  capacity?: number; // 魚缸容量
+  comfort: number; // 舒適度（0~100 暫定）
+  fishIds: number[]; // 此魚缸內的魚 ID 陣列
+  backgroundId?: string; // 背景樣式，例如 'bg_coral_01'
+  decorations?: Array<{
+    id: string; // 裝飾資產 id，例如 'deco_shell_02'
+    x: number; // 位置（以 UITransform 左上為原點或中心，固定一種）
+    y: number;
+    scale?: number; // 預設 1
+    rotation?: number; // 預設 0
+    zIndex?: number; // 圖層順序，預設 0（背景前/魚後等可自訂）
+    flipX?: boolean; // 可選
+  }>;
 }
 
 /** 玩家資料 */
 export interface PlayerData {
-    userId: string;                    // 玩家 ID (LINE)
-    gameId: string;                    // 玩家 ID (遊戲中用的)
-    displayName: string;               // 玩家名稱
-    picture: string;                   // 玩家頭貼
-    dragonBones: number;               // 遊戲貨幣（龍骨）
-    lastLoginDate: string;             // 上次登入日期（升級用）
-    lastLoginTime: string;             // 用來計算小時差（飢餓值用）
-    fishList: FishData[];              // 擁有的魚列表
-    tankList: TankData[];              // 擁有的魚缸列表
-    tankEnvironment: TankEnvironment;  // 魚缸環境狀態
-    inventory: {
-        feeds: {
-            normal: number;        // 普通飼料數量
-            premium: number;       // 高級飼料數量
-        };
-        items: {
-            coldMedicine: number;  // 感冒藥
-            revivePotion: number;  // 復活藥
-            genderPotion: number;  // 變性藥
-            upgradePotion: number; // 升級藥
-            changePotion: number;  // 整形藥
-            heater: number;        // 加熱器
-            fan: number;           // 電風扇
-            brush: number;         // 魚缸刷
-        };
+  userId: string; // 玩家 ID (LINE)
+  gameId: string; // 玩家 ID (遊戲中用的)
+  displayName: string; // 玩家名稱
+  picture: string; // 玩家頭貼
+  dragonBones: number; // 遊戲貨幣（龍骨）
+  lastLoginDate: string; // 上次登入日期（升級用）
+  lastLoginTime: string; // 用來計算小時差（飢餓值用）
+  fishList: FishData[]; // 擁有的魚列表
+  tankList: TankData[]; // 擁有的魚缸列表
+  tankEnvironment: TankEnvironment; // 魚缸環境狀態
+  inventory: {
+    feeds: {
+      normal: number; // 普通飼料數量
+      premium: number; // 高級飼料數量
     };
-    fashion: {
-        owned: string[];           // 已擁有的時裝
+    items: {
+      coldMedicine: number; // 感冒藥
+      revivePotion: number; // 復活藥
+      genderPotion: number; // 變性藥
+      upgradePotion: number; // 升級藥
+      changePotion: number; // 整形藥
+      heater: number; // 加熱器
+      fan: number; // 電風扇
+      brush: number; // 魚缸刷
     };
-    decorationsOwned?: string[];
-    signInData: {
-        weekly: {
-            weekKey: string;               // 該週星期一
-            daysSigned: boolean[];         // 一週 7 天簽到紀錄
-            questionsCorrect: boolean[];   // 是否答對紀錄
-            lastSignDate: string;          // 最後簽到日期
-        },
-        monthly: {
-            month: number;                 // 月份（1~12）
-            year: number;                  // 年（跨年重置）
-            signedDaysCount: number;       // 當月已簽到幾天
-            lastSignDate: string;          // 最後簽到日期
-        }
+  };
+  fashion: {
+    owned: string[]; // 已擁有的時裝
+  };
+  decorationsOwned?: string[];
+  signInData: {
+    weekly: {
+      weekKey: string; // 該週星期一
+      daysSigned: boolean[]; // 一週 7 天簽到紀錄
+      questionsCorrect: boolean[]; // 是否答對紀錄
+      lastSignDate: string; // 最後簽到日期
     };
+    monthly: {
+      month: number; // 月份（1~12）
+      year: number; // 年（跨年重置）
+      signedDaysCount: number; // 當月已簽到幾天
+      lastSignDate: string; // 最後簽到日期
+    };
+  };
 }
 
 /** 簽到題目 */
 export interface QuizQuestion {
-    question: string;      // 題目
-    options: string[];     // 選項
-    answerIndex: number;   // 正確答案索引
+  question: string; // 題目
+  options: string[]; // 選項
+  answerIndex: number; // 正確答案索引
 }
 
 /** 好友資料 */
 export interface FriendSummary {
-    userId: string;
-    gameId: string;
-    displayName?: string;
-    picture?: string;
+  userId: string;
+  gameId: string;
+  displayName?: string;
+  picture?: string;
 }
 
-export type FriendRequestStatus = 'pending' | 'accepted' | 'declined' | 'canceled' | 'expired';
+export type FriendRequestStatus = "pending" | "accepted" | "declined" | "canceled" | "expired";
 
 /** 好友邀請資料 */
 export interface FriendRequest {
-    requestId: string;
-    fromUserId: string;
-    toUserId: string;
-    createdAt: string;            // 邀請建立時間
-    status: FriendRequestStatus;  // 狀態
-    fromUser?: FriendSummary;     // 發送者
-    toUser?: FriendSummary;       // 接收者
+  requestId: string;
+  fromUserId: string;
+  toUserId: string;
+  createdAt: string; // 邀請建立時間
+  status: FriendRequestStatus; // 狀態
+  fromUser?: FriendSummary; // 發送者
+  toUser?: FriendSummary; // 接收者
 }
 
 /** 郵件類型 */
-export type MailType = 'FRIEND_REQUEST' | 'SYSTEM' | 'REWARD' | 'NOTICE';
+export type MailType = "FRIEND_REQUEST" | "SYSTEM" | "REWARD" | "NOTICE";
 /** 郵件狀態 */
-export type MailStatus = 'unread' | 'read' | 'archived';
+export type MailStatus = "unread" | "read" | "archived";
 
 /** 郵件內容 */
 export interface MailItem {
-    mailId: string;
-    type: MailType;
-    createdAt: string;
-    status: MailStatus;
-    title?: string;   // 標題
-    body?: string;    // 內容
-    fromUser?: { userId: string; displayName?: string; picture?: string };
-    payload?: {       // 額外資料
-        requestId?: string;
-        fromUserId?: string;
-    };
+  mailId: string;
+  type: MailType;
+  createdAt: string;
+  status: MailStatus;
+  title?: string; // 標題
+  body?: string; // 內容
+  fromUser?: { userId: string; displayName?: string; picture?: string };
+  payload?: {
+    // 額外資料
+    requestId?: string;
+    fromUserId?: string;
+  };
 }
 
 export class DataManager {
-    static useLocalStorage = false;
-    static apiBase = '';                             // API 伺服器 URL
-    static currentUserId: string | null = null;      // 當前登入的玩家 ID
-    static ready: Promise<void> | null = null;       // 初始化完成後的 Promise
-    static readyResolve: (() => void) | null = null;
-    static initializing = false;                     // 是否正在初始化
-    static FRIEND_LIMIT = 30;                        // 好友上限
+  static useLocalStorage = false;
+  static apiBase = ""; // API 伺服器 URL
+  static currentUserId: string | null = null; // 當前登入的玩家 ID
+  static ready: Promise<void> | null = null; // 初始化完成後的 Promise
+  static readyResolve: (() => void) | null = null;
+  static initializing = false; // 是否正在初始化
+  static FRIEND_LIMIT = 30; // 好友上限
 
-    // 快取相關
-    static _snapshot: PlayerData | null = null;                  // 快取玩家資料
-    static _snapshotTime = 0;                                    // 快取時間戳
-    static _inFlight: Promise<PlayerData | null> | null = null;  // 進行中的請求
-    static _listeners = new Set<(p: PlayerData) => void>();      // 資料更新監聽者
+  // 快取相關
+  static _snapshot: PlayerData | null = null; // 快取玩家資料
+  static _snapshotTime = 0; // 快取時間戳
+  static _inFlight: Promise<PlayerData | null> | null = null; // 進行中的請求
+  static _listeners = new Set<(p: PlayerData) => void>(); // 資料更新監聽者
 
-    static onChange(cb: (p: PlayerData) => void) {
-        this._listeners.add(cb);
-        return () => this._listeners.delete(cb);
+  static onChange(cb: (p: PlayerData) => void) {
+    this._listeners.add(cb);
+    return () => this._listeners.delete(cb);
+  }
+
+  /** 觸發資料更新事件 */
+  static _emit(p: PlayerData) {
+    for (const cb of this._listeners) cb(p);
+  }
+
+  /** 確保玩家資料存在 */
+  static async ensureInitialized(userId: string) {
+    this.setCurrentUser(userId);
+    const existing = await this.getPlayerData(userId);
+    if (!existing) {
+      console.error("[DataManager] 後端沒有這個玩家，請重新登入 LINE");
+    }
+  }
+
+  /** 設定當前玩家 ID */
+  static setCurrentUser(id: string) {
+    this.currentUserId = id;
+  }
+
+  /** 初始化玩家資料 */
+  static async init(userId: string) {
+    if (!this.ready) {
+      this.ready = new Promise<void>((res) => (this.readyResolve = res));
+    }
+    this.initializing = true; // 標記：開始初始化
+    this.setCurrentUser(userId);
+    await this.ensureInitialized(userId);
+    this.initializing = false; // 標記：初始化完畢
+    this.readyResolve?.(); // resolve，喚醒其他等待者
+  }
+
+  /** 取得玩家資料 */
+  static async getPlayerData(userId?: string): Promise<PlayerData | null> {
+    // 如果初始化還沒完成，等待 ready
+    if (this.ready && !this.initializing) {
+      try {
+        await this.ready;
+      } catch {}
     }
 
-    /** 觸發資料更新事件 */
-    static _emit(p: PlayerData) {
-        for (const cb of this._listeners) cb(p);
+    const fallbackId = typeof window !== "undefined" ? localStorage.getItem("currentUserId") : null;
+    const id = (userId ?? this.currentUserId ?? fallbackId ?? "").trim();
+
+    if (!id) {
+      console.warn("[getPlayerData] 沒有 userId（參數 / currentUserId / localStorage 都拿不到），回 null");
+      return null;
     }
 
-    /** 確保玩家資料存在 */
-    static async ensureInitialized(userId: string) {
-        this.setCurrentUser(userId);
-        const existing = await this.getPlayerData(userId);
-        if (!existing) {
-            console.error('[DataManager] 後端沒有這個玩家，請重新登入 LINE');
-        }
+    try {
+      const res = await fetch(`${this.apiBase}/player/${encodeURIComponent(id)}`);
+      if (!res.ok) {
+        if (res.status === 404) return null;
+        console.error(`取得玩家資料失敗: ${res.status} ${await res.text()}`);
+        return null;
+      }
+      const doc = await res.json();
+      return this._migratePlayerData(doc as PlayerData);
+    } catch (e) {
+      console.error("[getPlayerData] fetch 失敗：", e);
+      return null;
+    }
+  }
+
+  /** 儲存玩家資料 */
+  static async savePlayerData(data: PlayerData): Promise<PlayerData> {
+    if (this.useLocalStorage) {
+      localStorage.setItem("playerData", JSON.stringify(data));
+      return data;
+    }
+    const res = await fetch(`${this.apiBase}/player/${encodeURIComponent(data.userId)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`savePlayerData failed: ${res.status} ${text}`);
+    }
+    const fresh = await res.json();
+    this.setCurrentUser(fresh.userId);
+    return fresh;
+  }
+
+  /** 取得簽到題目 */
+  static async getQuizQuestions(): Promise<QuizQuestion[]> {
+    if (this.useLocalStorage) {
+      return quizQuestions;
+    } else {
+      const res = await fetch(`${this.apiBase}/quiz`);
+      return await res.json();
+    }
+  }
+
+  /** 清除本地儲存的玩家資料（測試用） */
+  static clearPlayerData() {
+    if (this.useLocalStorage) {
+      localStorage.removeItem("playerData");
+      console.log("玩家資料已清除");
+    }
+  }
+
+  /** 取得快取的玩家資料，必要時會重新抓取 */
+  static async getPlayerDataCached(opts?: {
+    maxAgeMs?: number;
+    refresh?: boolean;
+    userId?: string;
+  }): Promise<PlayerData | null> {
+    const maxAge = opts?.maxAgeMs ?? 3000; // 預設快取 3 秒
+    const now = Date.now();
+    const id = opts?.userId ?? this.currentUserId;
+
+    // 有快取 & 沒過期 & 沒要求 refresh
+    if (this._snapshot && now - this._snapshotTime < maxAge && !opts?.refresh) {
+      return this._snapshot;
     }
 
-    /** 設定當前玩家 ID */
-    static setCurrentUser(id: string) {
-        this.currentUserId = id;
+    // 如果有進行中的請求，直接共用
+    if (this._inFlight) {
+      return this._inFlight;
     }
 
-    /** 初始化玩家資料 */
-    static async init(userId: string) {
-        if (!this.ready) {
-            this.ready = new Promise<void>(res => (this.readyResolve = res));
-        }
-        this.initializing = true;          // 標記：開始初始化
-        this.setCurrentUser(userId);
-        await this.ensureInitialized(userId);
-        this.initializing = false;         // 標記：初始化完畢
-        this.readyResolve?.();             // resolve，喚醒其他等待者
-    }
-
-    /** 取得玩家資料 */
-    static async getPlayerData(userId?: string): Promise<PlayerData | null> {
-        // 如果初始化還沒完成，等待 ready
-        if (this.ready && !this.initializing) {
-            try { await this.ready; } catch { }
-        }
-
-        const fallbackId = (typeof window !== 'undefined') ? localStorage.getItem('currentUserId') : null;
-        const id = (userId ?? this.currentUserId ?? fallbackId ?? '').trim();
-
-        if (!id) {
-            console.warn('[getPlayerData] 沒有 userId（參數 / currentUserId / localStorage 都拿不到），回 null');
-            return null;
-        }
-
-        try {
-            const res = await fetch(`${this.apiBase}/player/${encodeURIComponent(id)}`);
-            if (!res.ok) {
-                if (res.status === 404) return null;
-                console.error(`取得玩家資料失敗: ${res.status} ${await res.text()}`);
-                return null;
-            }
-            const doc = await res.json();
-            return this._migratePlayerData(doc as PlayerData);
-        } catch (e) {
-            console.error('[getPlayerData] fetch 失敗：', e);
-            return null;
-        }
-    }
-
-    /** 儲存玩家資料 */
-    static async savePlayerData(data: PlayerData): Promise<PlayerData> {
-        if (this.useLocalStorage) {
-            localStorage.setItem('playerData', JSON.stringify(data));
-            return data;
-        }
-        const res = await fetch(`${this.apiBase}/player/${encodeURIComponent(data.userId)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (!res.ok) {
-            const text = await res.text().catch(() => '');
-            throw new Error(`savePlayerData failed: ${res.status} ${text}`);
-        }
-        const fresh = await res.json();
-        this.setCurrentUser(fresh.userId);
-        return fresh;
-    }
-
-    /** 取得簽到題目 */
-    static async getQuizQuestions(): Promise<QuizQuestion[]> {
-        if (this.useLocalStorage) {
-            return quizQuestions;
-        } else {
-            const res = await fetch(`${this.apiBase}/quiz`);
-            return await res.json();
-        }
-    }
-
-    /** 清除本地儲存的玩家資料（測試用） */
-    static clearPlayerData() {
-        if (this.useLocalStorage) {
-            localStorage.removeItem('playerData');
-            console.log('玩家資料已清除');
-        }
-    }
-
-    /** 取得快取的玩家資料，必要時會重新抓取 */
-    static async getPlayerDataCached(opts?: { maxAgeMs?: number, refresh?: boolean, userId?: string }): Promise<PlayerData | null> {
-        const maxAge = opts?.maxAgeMs ?? 3000; // 預設快取 3 秒
-        const now = Date.now();
-        const id = opts?.userId ?? this.currentUserId;
-
-        // 有快取 & 沒過期 & 沒要求 refresh
-        if (this._snapshot && (now - this._snapshotTime) < maxAge && !opts?.refresh) {
-            return this._snapshot;
-        }
-
-        // 如果有進行中的請求，直接共用
-        if (this._inFlight) {
-            return this._inFlight;
-        }
-
-        // 否則真正去抓
-        this._inFlight = (async () => {
-            const fresh = await this.getPlayerData(id);
-            this._inFlight = null;
-            if (fresh) {
-                this._snapshot = fresh;
-                this._snapshotTime = Date.now();
-                this._emit(fresh); // 通知訂閱者
-            }
-            return fresh;
-        })();
-
-        return this._inFlight;
-    }
-
-    /** 強制刷新玩家資料 */
-    static async refreshPlayerData(userId?: string) {
-        return this.getPlayerDataCached({ refresh: true, userId });
-    }
-
-    /** 儲存資料並更新快取 */
-    static async savePlayerDataWithCache(data: PlayerData): Promise<PlayerData> {
-        const fresh = await this.savePlayerData(data);
+    // 否則真正去抓
+    this._inFlight = (async () => {
+      const fresh = await this.getPlayerData(id);
+      this._inFlight = null;
+      if (fresh) {
         this._snapshot = fresh;
         this._snapshotTime = Date.now();
-        this._emit(fresh);
-        return fresh;
-    }
+        this._emit(fresh); // 通知訂閱者
+      }
+      return fresh;
+    })();
 
-    /** 取得好友列表 */
-    static async getFriends(): Promise<Array<{ userId: string, displayName?: string, picture?: string }>> {
-        const id = this.currentUserId;
-        if (!id) return [];
-        const res = await fetch(`${this.apiBase}/friends/${encodeURIComponent(id)}`);
-        if (!res.ok) return [];
-        return await res.json();
-    }
+    return this._inFlight;
+  }
 
-    /** 發送好友邀請 */
-    static async sendFriendRequest(friendId: string): Promise<{ request: FriendRequest }> {
-        const id = this.currentUserId;
-        if (!id) throw new Error('no current user');
-        if (!friendId) throw new Error('no friendId');
-        const res = await fetch(`${this.apiBase}/friend-requests`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fromUserId: id, toUserId: friendId })
-        });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            const error = new Error(err?.error || 'sendFriendRequest failed');
-            (error as any).code = err?.error; // 錯誤碼
-            throw error;
+  /** 強制刷新玩家資料 */
+  static async refreshPlayerData(userId?: string) {
+    return this.getPlayerDataCached({ refresh: true, userId });
+  }
+
+  /** 儲存資料並更新快取 */
+  static async savePlayerDataWithCache(data: PlayerData): Promise<PlayerData> {
+    const fresh = await this.savePlayerData(data);
+    this._snapshot = fresh;
+    this._snapshotTime = Date.now();
+    this._emit(fresh);
+    return fresh;
+  }
+
+  /** 取得好友列表 */
+  static async getFriends(): Promise<Array<{ userId: string; displayName?: string; picture?: string }>> {
+    const id = this.currentUserId;
+    if (!id) return [];
+    const res = await fetch(`${this.apiBase}/friends/${encodeURIComponent(id)}`);
+    if (!res.ok) return [];
+    return await res.json();
+  }
+
+  /** 發送好友邀請 */
+  static async sendFriendRequest(friendId: string): Promise<{ request: FriendRequest }> {
+    const id = this.currentUserId;
+    if (!id) throw new Error("no current user");
+    if (!friendId) throw new Error("no friendId");
+    const res = await fetch(`${this.apiBase}/friend-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fromUserId: id, toUserId: friendId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const error = new Error(err?.error || "sendFriendRequest failed");
+      (error as any).code = err?.error; // 錯誤碼
+      throw error;
+    }
+    return await res.json(); // { request }
+  }
+
+  /** 取得好友邀請清單 */
+  static async getFriendRequests(): Promise<{ incoming: FriendRequest[]; outgoing: FriendRequest[] }> {
+    const id = this.currentUserId;
+    if (!id) throw new Error("no current user");
+    const res = await fetch(`${this.apiBase}/friend-requests?userId=${encodeURIComponent(id)}`);
+    if (!res.ok) throw new Error(`getFriendRequests failed: ${res.status}`);
+    return await res.json(); // { incoming, outgoing }
+  }
+
+  /** 取得收件匣 */
+  static async getInbox(): Promise<MailItem[]> {
+    const id = this.currentUserId;
+    if (!id) throw new Error("no current user");
+    const res = await fetch(`${this.apiBase}/mail/inbox?userId=${encodeURIComponent(id)}`);
+    if (!res.ok) throw new Error(`getInbox failed: ${res.status}`);
+    return await res.json(); // MailItem[]
+  }
+
+  /** 將郵件標記為已讀 */
+  static async markMailRead(mailId: string): Promise<{ ok: boolean }> {
+    const id = this.currentUserId;
+    if (!id) throw new Error("no current user");
+    const res = await fetch(`${this.apiBase}/mail/mark-read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: id, mailId }),
+    });
+    if (!res.ok) throw new Error("markMailRead failed");
+    return await res.json();
+  }
+
+  /** 回覆好友邀請（接受 / 拒絕） */
+  static async respondFriendRequest(requestId: string, action: "accept" | "decline"): Promise<{ ok: boolean }> {
+    const id = this.currentUserId;
+    if (!id) throw new Error("no current user");
+    const res = await fetch(`${this.apiBase}/friend-requests/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: id, requestId, action }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const error = new Error(err?.error || "respondFriendRequest failed");
+      (error as any).code = err?.error;
+      throw error;
+    }
+    return await res.json(); // { ok: true }
+  }
+
+  /** 查詢使用者公開資料 */
+  static async lookupUserById(
+    userId: string
+  ): Promise<{ userId: string; gameId?: string; displayName?: string; picture?: string } | null> {
+    const id = (userId || "").trim();
+    if (!id) return null;
+    try {
+      const res = await fetch(`${this.apiBase}/public/player/${encodeURIComponent(id)}`);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`lookupUserById failed: ${res.status}`);
+      const doc = await res.json();
+      return { userId: doc.userId, gameId: doc.gameId, displayName: doc.displayName, picture: doc.picture };
+    } catch (e) {
+      console.warn("[lookupUserById] failed:", e);
+      throw e;
+    }
+  }
+
+  /** 取得好友的公開玩家資料（用於顯示魚缸） */
+  static async getPublicPlayerData(
+    friendUserId: string
+  ): Promise<Pick<PlayerData, "userId" | "displayName" | "picture" | "tankEnvironment" | "tankList" | "fishList">> {
+    const res = await fetch(`${this.apiBase}/public/player/${encodeURIComponent(friendUserId)}`);
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
+  }
+
+  /** 解除好友（雙向） */
+  static async deleteFriend(friendUserId: string): Promise<{ ok: boolean }> {
+    const id = this.currentUserId;
+    if (!id) throw new Error("no current user");
+    const res = await fetch(`${this.apiBase}/friends/remove`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: id, friendUserId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const error = new Error(err?.error || "deleteFriend failed");
+      (error as any).code = err?.error;
+      throw error;
+    }
+    return await res.json(); // { ok: true }
+  }
+
+  /** 取得推薦玩家（隨機） */
+  static async getRecommendedUsers(
+    count = 5
+  ): Promise<Array<{ userId: string; displayName?: string; picture?: string }>> {
+    try {
+      const id = this.currentUserId; // 當前登入玩家
+      const res = await fetch(
+        `${this.apiBase}/recommend-users?count=${count}&excludeUserId=${encodeURIComponent(id || "")}`
+      );
+      if (!res.ok) {
+        console.warn("[DataManager] getRecommendedUsers failed:", res.status);
+        return [];
+      }
+      return await res.json();
+    } catch (e) {
+      console.warn("[DataManager] getRecommendedUsers error:", e);
+      return [];
+    }
+  }
+
+  /** 後端購買（優先） */
+  static async purchaseViaApi(sku: string, qty = 1): Promise<PlayerData> {
+    const id = this.currentUserId;
+    if (!id) throw new Error("no current user");
+    const res = await fetch(`${this.apiBase}/purchase`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: id, sku, qty }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`purchase failed: ${res.status} ${text}`);
+    }
+    const fresh = await res.json();
+    // 同步快取與廣播
+    this._snapshot = fresh;
+    this._snapshotTime = Date.now();
+    this._emit(fresh);
+    return fresh;
+  }
+
+  /** 本地 fallback：依 SKU 直接改 PlayerData 再存回 */
+  static async purchaseFallback(sku: string, qty: number, unitPrice: number): Promise<PlayerData> {
+    const pd = await this.getPlayerDataCached({ refresh: true });
+    if (!pd) throw new Error("no player data");
+
+    const total = unitPrice * qty;
+    if ((pd.dragonBones ?? 0) < total) {
+      const e: any = new Error("NOT_ENOUGH");
+      e.code = "NOT_ENOUGH";
+      throw e;
+    }
+    pd.dragonBones = (pd.dragonBones ?? 0) - total;
+
+    // 映射 SKU -> inventory 欄位
+    const addItem = (path: string, add: number) => {
+      // 簡易路徑設定器：feeds.normal / items.heater 等
+      const [root, key] = path.split(".");
+      (pd.inventory as any)[root][key] = ((pd.inventory as any)[root][key] ?? 0) + add;
+    };
+
+    const APPLY: Record<string, (n: number) => void> = {
+      med_trans: (n) => addItem("items.genderPotion", n),
+      med_change: (n) => addItem("items.changePotion", n),
+      med_cold: (n) => addItem("items.coldMedicine", n),
+      med_lvup: (n) => addItem("items.upgradePotion", n),
+      med_revive: (n) => addItem("items.revivePotion", n),
+      feed_normal: (n) => addItem("feeds.normal", n),
+      feed_high: (n) => addItem("feeds.premium", n),
+      env_brush: (n) => addItem("items.brush", n),
+      env_fan: (n) => addItem("items.fan", n),
+      heater: (n) => addItem("items.heater", n),
+    };
+
+    const FASHION_BY_SKU: Record<string, string> = {
+      cloth_bow: "acc_bowtie",
+      cloth_chef_hat: "hat_chef",
+      cloth_fedora: "hat_fedora",
+      cloth_sun_glass: "acc_sunglass",
+
+      cloth_crown: "hat_crown",
+      cloth_flower: "acc_flower",
+      cloth_heart_glass: "acc_heart_glass",
+      cloth_magic_hat: "hat_magic",
+      cloth_paint_hat: "hat_beret",
+      cloth_party_hat: "hat_party",
+      // 之後有新時裝就補在這
+    };
+
+    if (APPLY[sku]) {
+      APPLY[sku](qty);
+    } else {
+      // 裝飾（NON_CONSUMABLE）
+      if (sku.startsWith("deco_") || sku.startsWith("bg_")) {
+        const set = new Set(pd.decorationsOwned ?? []);
+        set.add(sku);
+        pd.decorationsOwned = Array.from(set);
+      } else {
+        // 其餘仍視為時裝（維持既有邏輯）
+        const fashionId = FASHION_BY_SKU[sku] || sku; // 沒對應就保留原樣
+        if (pd.fashion.owned.indexOf(fashionId) === -1) {
+          pd.fashion.owned.push(fashionId);
         }
-        return await res.json(); // { request }
+      }
     }
 
-    /** 取得好友邀請清單 */
-    static async getFriendRequests(): Promise<{ incoming: FriendRequest[], outgoing: FriendRequest[] }> {
-        const id = this.currentUserId;
-        if (!id) throw new Error('no current user');
-        const res = await fetch(`${this.apiBase}/friend-requests?userId=${encodeURIComponent(id)}`);
-        if (!res.ok) throw new Error(`getFriendRequests failed: ${res.status}`);
-        return await res.json(); // { incoming, outgoing }
+    const fresh = await this.savePlayerDataWithCache(pd);
+    return fresh;
+  }
+
+  /** 高階購買：先嘗試後端，失敗才 fallback */
+  static async purchase(
+    sku: string,
+    qty = 1,
+    unitPrice?: number
+  ): Promise<{ ok: true; player: PlayerData } | { ok: false; error: string }> {
+    try {
+      const player = await this.purchaseViaApi(sku, qty);
+      return { ok: true, player };
+    } catch (e: any) {
+      // 若沒有後端或報 404/5xx，可走本地 fallback，但需要單價
+      if (unitPrice == null) {
+        return { ok: false, error: e?.message || "PURCHASE_FAILED" };
+      }
+      try {
+        const player = await this.purchaseFallback(sku, qty, unitPrice);
+        return { ok: true, player };
+      } catch (e2: any) {
+        return { ok: false, error: e2?.code || e2?.message || "PURCHASE_FAILED" };
+      }
     }
+  }
 
-    /** 取得收件匣 */
-    static async getInbox(): Promise<MailItem[]> {
-        const id = this.currentUserId;
-        if (!id) throw new Error('no current user');
-        const res = await fetch(`${this.apiBase}/mail/inbox?userId=${encodeURIComponent(id)}`);
-        if (!res.ok) throw new Error(`getInbox failed: ${res.status}`);
-        return await res.json(); // MailItem[]
+  private static _migratePlayerData(p: PlayerData): PlayerData {
+    // decorationsOwned 預設空陣列
+    if (!Array.isArray((p as any).decorationsOwned)) {
+      (p as any).decorationsOwned = [];
     }
-
-    /** 將郵件標記為已讀 */
-    static async markMailRead(mailId: string): Promise<{ ok: boolean }> {
-        const id = this.currentUserId;
-        if (!id) throw new Error('no current user');
-        const res = await fetch(`${this.apiBase}/mail/mark-read`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: id, mailId })
-        });
-        if (!res.ok) throw new Error('markMailRead failed');
-        return await res.json();
+    // 每個缸的 decorations 預設空陣列
+    if (Array.isArray(p.tankList)) {
+      for (const t of p.tankList) {
+        if (!Array.isArray(t.decorations)) t.decorations = [];
+      }
     }
-
-    /** 回覆好友邀請（接受 / 拒絕） */
-    static async respondFriendRequest(requestId: string, action: 'accept' | 'decline'): Promise<{ ok: boolean }> {
-        const id = this.currentUserId;
-        if (!id) throw new Error('no current user');
-        const res = await fetch(`${this.apiBase}/friend-requests/respond`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: id, requestId, action })
-        });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            const error = new Error(err?.error || 'respondFriendRequest failed');
-            (error as any).code = err?.error;
-            throw error;
-        }
-        return await res.json(); // { ok: true }
-    }
-
-    /** 查詢使用者公開資料 */
-    static async lookupUserById(userId: string): Promise<{ userId: string, gameId?: string, displayName?: string, picture?: string } | null> {
-        const id = (userId || '').trim();
-        if (!id) return null;
-        try {
-            const res = await fetch(`${this.apiBase}/public/player/${encodeURIComponent(id)}`);
-            if (res.status === 404) return null;
-            if (!res.ok) throw new Error(`lookupUserById failed: ${res.status}`);
-            const doc = await res.json();
-            return { userId: doc.userId, gameId: doc.gameId, displayName: doc.displayName, picture: doc.picture };
-        } catch (e) {
-            console.warn('[lookupUserById] failed:', e);
-            throw e;
-        }
-    }
-
-    /** 取得好友的公開玩家資料（用於顯示魚缸） */
-    static async getPublicPlayerData(friendUserId: string)
-        : Promise<Pick<PlayerData, 'userId' | 'displayName' | 'picture' | 'tankEnvironment' | 'tankList' | 'fishList'>> {
-        const res = await fetch(`${this.apiBase}/public/player/${encodeURIComponent(friendUserId)}`);
-        if (!res.ok) throw new Error(await res.text());
-        return await res.json();
-    }
-
-    /** 解除好友（雙向） */
-    static async deleteFriend(friendUserId: string): Promise<{ ok: boolean }> {
-        const id = this.currentUserId;
-        if (!id) throw new Error('no current user');
-        const res = await fetch(`${this.apiBase}/friends/remove`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: id, friendUserId })
-        });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            const error = new Error(err?.error || 'deleteFriend failed');
-            (error as any).code = err?.error;
-            throw error;
-        }
-        return await res.json(); // { ok: true }
-    }
-
-    /** 取得推薦玩家（隨機） */
-    static async getRecommendedUsers(count = 5): Promise<Array<{ userId: string, displayName?: string, picture?: string }>> {
-        try {
-            const id = this.currentUserId;  // 當前登入玩家
-            const res = await fetch(`${this.apiBase}/recommend-users?count=${count}&excludeUserId=${encodeURIComponent(id || '')}`);
-            if (!res.ok) {
-                console.warn('[DataManager] getRecommendedUsers failed:', res.status);
-                return [];
-            }
-            return await res.json();
-        } catch (e) {
-            console.warn('[DataManager] getRecommendedUsers error:', e);
-            return [];
-        }
-    }
-
-
-    /** 後端購買（優先） */
-    static async purchaseViaApi(sku: string, qty = 1): Promise<PlayerData> {
-        const id = this.currentUserId;
-        if (!id) throw new Error('no current user');
-        const res = await fetch(`${this.apiBase}/purchase`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: id, sku, qty })
-        });
-        if (!res.ok) {
-            const text = await res.text().catch(() => '');
-            throw new Error(`purchase failed: ${res.status} ${text}`);
-        }
-        const fresh = await res.json();
-        // 同步快取與廣播
-        this._snapshot = fresh;
-        this._snapshotTime = Date.now();
-        this._emit(fresh);
-        return fresh;
-    }
-
-    /** 本地 fallback：依 SKU 直接改 PlayerData 再存回 */
-    static async purchaseFallback(sku: string, qty: number, unitPrice: number): Promise<PlayerData> {
-        const pd = await this.getPlayerDataCached({ refresh: true });
-        if (!pd) throw new Error('no player data');
-
-        const total = unitPrice * qty;
-        if ((pd.dragonBones ?? 0) < total) {
-            const e: any = new Error('NOT_ENOUGH');
-            e.code = 'NOT_ENOUGH';
-            throw e;
-        }
-        pd.dragonBones = (pd.dragonBones ?? 0) - total;
-
-        // 映射 SKU -> inventory 欄位
-        const addItem = (path: string, add: number) => {
-            // 簡易路徑設定器：feeds.normal / items.heater 等
-            const [root, key] = path.split('.');
-            (pd.inventory as any)[root][key] = ((pd.inventory as any)[root][key] ?? 0) + add;
-        };
-
-        const APPLY: Record<string, (n: number) => void> = {
-            'med_trans': (n) => addItem('items.genderPotion', n),
-            'med_change': (n) => addItem('items.changePotion', n),
-            'med_cold': (n) => addItem('items.coldMedicine', n),
-            'med_lvup': (n) => addItem('items.upgradePotion', n),
-            'med_revive': (n) => addItem('items.revivePotion', n),
-            'feed_normal': (n) => addItem('feeds.normal', n),
-            'feed_high': (n) => addItem('feeds.premium', n),
-            'env_brush': (n) => addItem('items.brush', n),
-            'env_fan': (n) => addItem('items.fan', n),
-            'heater': (n) => addItem('items.heater', n),
-        };
-
-        const FASHION_BY_SKU: Record<string, string> = {
-            cloth_bow: 'acc_bowtie',
-            cloth_chef_hat: 'hat_chef',
-            cloth_fedora: 'hat_fedora',
-            cloth_sun_glass: 'acc_sunglass',
-
-            cloth_crown: 'hat_crown',
-            cloth_flower: 'acc_flower',
-            cloth_heart_glass: 'acc_heart_glass',
-            cloth_magic_hat: 'hat_magic',
-            cloth_paint_hat: 'hat_beret',
-            cloth_party_hat: 'hat_party',
-            // 之後有新時裝就補在這
-        };
-
-        if (APPLY[sku]) {
-            APPLY[sku](qty);
-        } else {
-            // 裝飾（NON_CONSUMABLE）
-            if (sku.startsWith('deco_') || sku.startsWith('bg_')) {
-                const set = new Set(pd.decorationsOwned ?? []);
-                set.add(sku);
-                pd.decorationsOwned = Array.from(set);
-            } else {
-                // 其餘仍視為時裝（維持既有邏輯）
-                const fashionId = FASHION_BY_SKU[sku] || sku; // 沒對應就保留原樣
-                if (pd.fashion.owned.indexOf(fashionId) === -1) {
-                    pd.fashion.owned.push(fashionId);
-                }
-            }
-        }
-
-
-        const fresh = await this.savePlayerDataWithCache(pd);
-        return fresh;
-    }
-
-    /** 高階購買：先嘗試後端，失敗才 fallback */
-    static async purchase(sku: string, qty = 1, unitPrice?: number): Promise<{ ok: true, player: PlayerData } | { ok: false, error: string }> {
-        try {
-            const player = await this.purchaseViaApi(sku, qty);
-            return { ok: true, player };
-        } catch (e: any) {
-            // 若沒有後端或報 404/5xx，可走本地 fallback，但需要單價
-            if (unitPrice == null) {
-                return { ok: false, error: e?.message || 'PURCHASE_FAILED' };
-            }
-            try {
-                const player = await this.purchaseFallback(sku, qty, unitPrice);
-                return { ok: true, player };
-            } catch (e2: any) {
-                return { ok: false, error: e2?.code || e2?.message || 'PURCHASE_FAILED' };
-            }
-        }
-    }
-
-    private static _migratePlayerData(p: PlayerData): PlayerData {
-        // decorationsOwned 預設空陣列
-        if (!Array.isArray((p as any).decorationsOwned)) {
-            (p as any).decorationsOwned = [];
-        }
-        // 每個缸的 decorations 預設空陣列
-        if (Array.isArray(p.tankList)) {
-            for (const t of p.tankList) {
-                if (!Array.isArray(t.decorations)) t.decorations = [];
-            }
-        }
-        return p;
-    }
-
+    return p;
+  }
+  static async saveOtherPlayerData(data: PlayerData): Promise<PlayerData> {
+    const res = await fetch(`${this.apiBase}/player/${encodeURIComponent(data.userId)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(`saveOtherPlayerData failed: ${res.status}`);
+    return await res.json();
+  }
 }
