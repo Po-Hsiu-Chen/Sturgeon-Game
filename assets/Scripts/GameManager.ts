@@ -28,6 +28,7 @@ import { ConfirmDialogManager } from "./ConfirmDialogManager";
 import { DecorationEditor } from "./decoration/DecorationEditor";
 import { FishFamilyService, IGameAdapter } from "./marry/FishFamilyService";
 import { FriendPanel } from "./FriendPanel";
+import { BackgroundAnimator } from "./decoration/BackgroundAnimator";
 
 const { ccclass, property } = _decorator;
 
@@ -508,8 +509,20 @@ export class GameManager extends Component {
 
     // ---- 背景（可選）----
     if (bgNode) {
+      const animator = bgNode.getComponent(BackgroundAnimator);
       const bgSprite = bgNode.getComponent(Sprite);
-      if (bgSprite) {
+
+      if (animator) {
+        // 有動畫腳本 → 交給它處理不同背景
+        const bgId = tank.backgroundId; // 例如 'bg_azure'，沒設就是 undefined
+        animator.setBackground(bgId);
+
+        // 沒有自訂背景時，可用預設 frames 或預設靜態圖
+        if (!bgId && bgSprite && animator.frames.length === 0 && this.defaultBackgroundSpriteFrame) {
+          bgSprite.spriteFrame = this.defaultBackgroundSpriteFrame;
+        }
+      } else if (bgSprite) {
+        // 沒掛動畫 → 沿用原本靜態背景邏輯
         const sf =
           (tank.backgroundId && TankAssets.backgrounds.get(tank.backgroundId)) || this.defaultBackgroundSpriteFrame;
         if (sf) bgSprite.spriteFrame = sf;

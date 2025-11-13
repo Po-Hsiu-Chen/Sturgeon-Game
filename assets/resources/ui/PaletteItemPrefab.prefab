@@ -348,7 +348,7 @@
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "58e576d5-c28a-40a6-a1ed-0131344cecb8@f9941",
+      "__uuid__": "19a5d396-5ace-48e9-b62e-134e0fbdac69@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 0,
@@ -694,9 +694,7 @@
     "_disabledSprite": null,
     "_duration": 0.1,
     "_zoomScale": 1.2,
-    "_target": {
-      "__id__": 1
-    },
+    "_target": null,
     "_id": ""
   },
   {
