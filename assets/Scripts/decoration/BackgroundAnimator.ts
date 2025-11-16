@@ -1,4 +1,3 @@
-// BackgroundAnimator.ts
 import { _decorator, Component, Sprite, SpriteFrame, resources } from "cc";
 const { ccclass, property } = _decorator;
 

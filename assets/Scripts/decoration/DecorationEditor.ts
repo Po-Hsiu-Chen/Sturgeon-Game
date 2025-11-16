@@ -1,21 +1,4 @@
-// assets/scripts/decor/DecorationEditor.ts
-import {
-  _decorator,
-  Component,
-  Node,
-  Button,
-  Label,
-  Prefab,
-  instantiate,
-  UITransform,
-  Sprite,
-  Color,
-  tween,
-  UIOpacity,
-  v3,
-  resources,
-  SpriteFrame,
-} from "cc";
+import { _decorator, Component, Node, Button, Label, Prefab, instantiate, Sprite, tween, UIOpacity, resources, SpriteFrame,} from "cc";
 import { DataManager, PlayerData } from "../DataManager";
 import { GameManager } from "../GameManager";
 import { DecorationItem } from "./DecorationItem";
@@ -191,44 +174,53 @@ export class DecorationEditor extends Component {
         const opa = card.getComponent(UIOpacity) ?? card.addComponent(UIOpacity);
 
         if (this.isBgSku(sku)) {
-          // 背景邏輯：點擊切換背景
+          // 背景：只能在不同背景間切換，不能變成沒背景
           btn.interactable = true;
           btn.node.on(Node.EventType.TOUCH_END, () => this.applyBackground(sku), this);
-          opa.opacity = sku === this.currentBgId ? 255 : 120; // 選中高亮，其餘半透明
+          opa.opacity = sku === this.currentBgId ? 255 : 120; // 目前背景高亮
+        } else if (this.isLightSku(sku)) {
+          // 燈光：再點一次就關掉
+          btn.interactable = true;
+          btn.node.on(Node.EventType.TOUCH_END, () => this.toggleLight(sku), this);
+          const selected = this.hasDecoration(sku);
+          opa.opacity = selected ? 255 : 120;
         } else {
-          if (this.isLightSku(sku)) {
-            btn.interactable = true;
-            btn.node.on(Node.EventType.TOUCH_END, () => this.applyLight(sku), this);
-            // 透明度由是否為目前使用中決定
-            opa.opacity = this.hasDecoration(sku) ? 255 : 120;
-          } else {
-            // 原本裝飾（可拖曳）的流程
-            const already = this.hasDecoration(sku);
-            btn.interactable = !already;
-            btn.node.on(Node.EventType.TOUCH_END, () => this.spawnItem(sku, 0, 0), this);
-            opa.opacity = already ? 120 : 255;
-          }
+          // 一般裝飾：點一下放上去，再點一次移除
+          btn.interactable = true;
+          btn.node.on(Node.EventType.TOUCH_END, () => this.toggleDecoration(sku), this);
+          const selected = this.hasDecoration(sku);
+          opa.opacity = selected ? 255 : 120;
         }
       })
     );
   }
 
-  // 只允許單一燈光存在
+  /** 只允許單一燈光存在（可以是 0 或 1） */
   private applyLight(lightSku: string) {
+    if (!this.decoLayer) return;
+
     // 1) 先移除任何已存在的燈光
-    for (const ch of [...this.decoLayer.children]) {
-      const id = ch.name.replace(/^Deco_/, "");
-      if (this.isLightSku(id)) ch.destroy();
+    for (const ch of this.decoLayer.children.slice()) {
+      const id = this.getDecoIdFromNode(ch);
+      if (id && this.isLightSku(id)) {
+        ch.destroy();
+      }
     }
+
+    // 傳進來空字串代表只是關燈，不新增
+    if (!lightSku) {
+      this.updatePaletteLockState();
+      return;
+    }
+
     // 2) 加入新的燈光（固定在視窗中央、不可拖曳）
     const prefab = this.gm.getDecorationPrefab(lightSku) as Prefab | null | undefined;
     if (!prefab) return;
 
     const n = instantiate(prefab);
     n.name = `${DECORATION_PREFIX}${lightSku}`;
-    // 視需要：鋪滿或固定位置；一般燈光 prefab 做滿版，不用動
-    this.decoLayer.addChild(n);
-    // 不綁 DecorationItem，即不可拖曳/縮放
+    this.decoLayer.addChild(n); // 不綁 DecorationItem，即不可拖曳/縮放
+
     this.updatePaletteLockState();
   }
 
@@ -241,22 +233,21 @@ export class DecorationEditor extends Component {
       const kind = (card as any).__kind as "bg" | "deco";
       const btn = card.getComponent(Button) ?? card.addComponent(Button);
       const opa = card.getComponent(UIOpacity) ?? card.addComponent(UIOpacity);
-      if (this.isLightSku(sku)) {
-        const selected = this.hasDecoration(sku);
-        btn.interactable = !selected; // 已選中的保持半透明，不可再次點
-        opa.opacity = selected ? 255 : 120;
-        continue;
-      }
+
+      // 所有卡片都可以點
+      btn.interactable = true;
+
       if (kind === "bg") {
-        btn.interactable = true;
-        opa.opacity = sku === this.currentBgId ? 120 : 255; // 使用中半透明，未使用不透明
+        // 背景：永遠要有一個選中
+        opa.opacity = sku === this.currentBgId ? 255 : 120;
       } else {
-        const already = this.hasDecoration(sku);
-        btn.interactable = !already;
-        opa.opacity = already ? 120 : 255;
+        // 裝飾（包含燈光）：有擺就是選中
+        const selected = this.hasDecoration(sku);
+        opa.opacity = selected ? 255 : 120;
       }
     }
   }
+
 
   /** 從 resources/icons 載入 SpriteFrame（優先 icons/<key>/spriteFrame，其次 icons/<key>） */
   private async loadIconFrame(key: string): Promise<SpriteFrame | null> {
@@ -304,6 +295,27 @@ export class DecorationEditor extends Component {
 
     // 放了一個後，同步更新 Palette 鎖定狀態
     this.updatePaletteLockState();
+  }
+
+  /** 點 Palette 時切換一般裝飾：沒有就放，有就移除 */
+  private toggleDecoration(decoSku: string) {
+    if (this.hasDecoration(decoSku)) {
+      this.removeDecoration(decoSku);
+      // CHILD_REMOVED 事件會自動觸發 updatePaletteLockState
+    } else {
+      this.spawnItem(decoSku, 0, 0); // spawnItem 裡面會呼叫 updatePaletteLockState
+    }
+  }
+
+  /** 點 Palette 時切換燈光：0 或 1 個 */
+  private toggleLight(lightSku: string) {
+    const already = this.hasDecoration(lightSku);
+    if (already) {
+      // 關燈：只清空燈光，不再新增
+      this.applyLight("");
+    } else {
+      this.applyLight(lightSku);
+    }
   }
 
   /** 切換裝飾是否可互動（非編輯模式時要完全不可點） */
@@ -428,5 +440,27 @@ export class DecorationEditor extends Component {
   /** 從節點名稱還原裝飾 id（e.g. Deco_XYZ → XYZ） */
   private getDecoIdFromNode(n: Node): string | null {
     return n.name.startsWith(DECORATION_PREFIX) ? n.name.substring(DECORATION_PREFIX.length) : null;
+  }
+
+  /** 移除指定裝飾（包含燈光） */
+  private removeDecoration(decoId: string) {
+    if (!this.decoLayer) return;
+    const name = `${DECORATION_PREFIX}${decoId}`;
+    for (const ch of this.decoLayer.children.slice()) {
+      if (ch.name === name) {
+        ch.destroy();
+      }
+    }
+  }
+
+  /** 移除所有燈光裝飾 */
+  private removeAllLights() {
+    if (!this.decoLayer) return;
+    for (const ch of this.decoLayer.children.slice()) {
+      const id = this.getDecoIdFromNode(ch);
+      if (id && this.isLightSku(id)) {
+        ch.destroy();
+      }
+    }
   }
 }

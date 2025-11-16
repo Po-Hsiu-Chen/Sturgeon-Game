@@ -1323,6 +1323,7 @@ export class GameManager extends Component {
       .filter((f) => f && !f.isDead) as typeof this.playerData.fishList;
   }
 
+  
   /** 是否有尚未復活的死亡魚（全帳號） */
   private hasDeadFish(): boolean {
     return !!this.playerData?.fishList.some((f) => f.isDead);
@@ -1348,7 +1349,7 @@ export class GameManager extends Component {
     }
   }
 
-  /** 若某缸5隻都≥6階 → 開啟下一缸（最多三缸），新缸capacity=5 */
+  /** 若某缸6隻都≥6階 → 開啟下一缸（最多三缸），新缸capacity=5 */
   private async checkAndUnlockNextTankIfEligible(tankId: number) {
     if (!this.playerData) return;
     // 最多三缸
@@ -1495,7 +1496,7 @@ export class GameManager extends Component {
     const capacity = tank.capacity ?? (tank.id === 1 ? 3 : 6);
 
     if (this.tankFishCountLabel) {
-      this.tankFishCountLabel.string = `${aliveFish} / ${capacity}`;
+      this.tankFishCountLabel.string = `本缸：${aliveFish} / ${capacity}`;
     }
   }
 

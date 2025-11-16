@@ -25,9 +25,28 @@ export class FishFamilyService {
     return owner.fishList.find((f) => f.id === id) ?? null;
   }
 
+  /** 找出「這個玩家第一個有空位的魚缸 id」（依 id 由小到大） */
+  private findFirstAvailableTankId(owner: PlayerData): number | null {
+    const tanks = [...owner.tankList].sort((a, b) => a.id - b.id);
+
+    for (const t of tanks) {
+      const cap = t.capacity ?? (t.id === 1 ? 3 : 6);
+      const alive = t.fishIds
+        .map((id) => owner.fishList.find((f) => f.id === id))
+        .filter((f): f is FishData => !!f && !f.isDead).length;
+
+      if (alive < cap) {
+        return t.id;
+      }
+    }
+
+    return null; // 沒有任何空位
+  }
+
   private isAdult(f: FishData) {
     return f.stage >= ADULT_STAGE;
   }
+
   private isAlive(f: FishData) {
     return !f.isDead;
   }
@@ -147,21 +166,36 @@ export class FishFamilyService {
       return false;
     }
 
+    // 再保險：找出雙方「第一個有空位的魚缸」
+    const myTankId = this.findFirstAvailableTankId(me);
+    if (myTankId == null) {
+      this.adapter.toast("你的魚缸沒有空位");
+      return false;
+    }
+
+    let friendTankId: number | null = null;
+    if (v.cross) {
+      friendTankId = this.findFirstAvailableTankId(bOwner);
+      if (friendTankId == null) {
+        this.adapter.toast("好友魚缸沒有空位");
+        return false;
+      }
+    }
+
     // 扣 50 龍骨（由發起方負擔）
     me.dragonBones -= COST_BIRTH;
 
-    const myTankId = this.adapter.getCurrentTankId();
+    // 自己的寶寶：放到「有空位魚缸中的第一缸」
     await this.adapter.addBabyFishToTank(me.gameId, myTankId);
 
-    if (v.cross) {
-      // 好友那一條：若不能直接改，就寄 Mail
+    // 好友那一條：同樣放到好友「有空位魚缸中的第一缸」
+    if (v.cross && friendTankId != null) {
       if (this.adapter.canMutateOtherPlayer(bOwner.gameId)) {
-        const friendTankId = myTankId; // 也可用對方預設缸或最空的缸
         await this.adapter.addBabyFishToTank(bOwner.gameId, friendTankId);
       } else {
         await this.adapter.enqueueMailFor(bOwner.gameId, "new-baby", {
           type: "GRANT_BABY",
-          suggestedTankId: myTankId,
+          suggestedTankId: friendTankId,
         });
       }
     }

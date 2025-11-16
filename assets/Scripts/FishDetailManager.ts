@@ -752,16 +752,30 @@ export class FishDetailManager extends Component {
     const friendPanel = this.node.scene.getComponentInChildren(FriendPanel);
     if (friendPanel) {
       await friendPanel.refreshFriendCandidates(); // 先取回好友＋魚
-      this.chooseDialog.setFriendCandidatesProvider(() =>
-        friendPanel.getFriendMarriageCandidates()
-      );
+      this.chooseDialog.setFriendCandidatesProvider(() => friendPanel.getFriendMarriageCandidates());
     }
     this.chooseDialog.openFor(fish.id);
-
-
   }
   private async onClickBreed() {
     if (this.currentFishId < 0) return;
+
+    // 先取得目前這條魚
+    const { fish, isFriend } = await this.getCurrentFishAndPlayer();
+    if (!fish) return;
+
+    // 朋友的魚：不能操作
+    if (isFriend) {
+      showFloatingTextCenter(this.floatingNode, "朋友的魚無法在這裡生魚寶寶");
+      return;
+    }
+
+    // 還沒結婚 直接提示，不要開確認窗
+    if (!fish.isMarried) {
+      showFloatingTextCenter(this.floatingNode, "還沒結婚，不能生魚寶寶喔！");
+      return;
+    }
+
+    // 條件都 OK，再走原本流程
     await this.gameManager.breedFish(this.currentFishId);
   }
 }
