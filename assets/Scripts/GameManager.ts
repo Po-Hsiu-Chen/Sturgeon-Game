@@ -112,7 +112,8 @@ export class GameManager extends Component {
   @property(Button) decorEditBtn: Button = null!; // 「裝飾」編輯按鈕（只在自己缸顯示）
   @property(DecorationEditor) decorEditor: DecorationEditor = null!;
 
-  private currentTankId: number = 1; // 當前魚缸 ID
+  private currentTankId: number = 1; // 當前自己的魚缸 ID
+  private friendCurrentTankIndex: number = 0; // 當前正在看的朋友魚缸 index（0-based）
   private offDMChange: (() => void) | null = null;
   private playerData: PlayerData | null = null;
   private isViewingFriend = false;
@@ -382,7 +383,7 @@ export class GameManager extends Component {
 
   private async setHeaderUser(displayName: string, gameId: string, picture?: string) {
     this.userNameLabel.string = displayName || "未命名";
-    this.gameIdLabel.string = gameId || "";
+    this.gameIdLabel.string = `ID: ${gameId || ""}`;
 
     if (picture) {
       await this.loadAvatar(picture);
@@ -619,6 +620,7 @@ export class GameManager extends Component {
 
     this.activeTankViewport.active = true; // 顯示主視圖
     this.tombTankNode.active = false; // 關閉墓園
+    this.updateTombStar(); // 同步墓地星星狀態（關掉）
 
     // 換回自己的名字/ID/頭像、隱藏返回鈕
     await this.setHeaderUser(
@@ -671,6 +673,9 @@ export class GameManager extends Component {
     );
 
     if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = true;
+
+    // 進朋友缸時，預設正在看朋友的第 0 號魚缸
+    this.friendCurrentTankIndex = 0;
 
     // 換 header 後
     this.applyFriendViewUI(true);
@@ -749,6 +754,10 @@ export class GameManager extends Component {
 
     // 朋友的金錢顯示遮蔽
     if (this.dragonboneLabel) this.dragonboneLabel.string = "保密";
+
+    // 記住目前正在看朋友的第幾缸，更新星星
+    this.friendCurrentTankIndex = idx;
+    this.updateTankButtons();
   }
 
   async switchToTombTank() {
@@ -761,6 +770,18 @@ export class GameManager extends Component {
 
     this.updateAddFishBtnState();
     await this.tombManager?.refreshTombs();
+
+    // 更新墓地與魚缸按鈕的星星狀態
+    this.updateTombStar();
+    this.updateTankButtons();
+  }
+
+  /** 控制墓地按鈕上的星星（當前是否在墓地） */
+  private updateTombStar() {
+    if (!this.tombTankBtn) return;
+    const star = this.tombTankBtn.node.getChildByName("Star");
+    if (!star) return;
+    star.active = !!this.tombTankNode?.active;
   }
 
   /** 回到自己的第一缸 */
@@ -770,11 +791,15 @@ export class GameManager extends Component {
     await this.switchTank(1);
   }
 
-  /** 依目前視圖（自己/朋友）更新 Tank_1~3 的數字、鎖頭與可點狀態 */
+  /** 依目前視圖（自己/朋友）更新 Tank_1~3 的數字、鎖頭、星星與可點狀態 */
   private updateTankButtons() {
     const totalOpened = this.isViewingFriend
       ? this.viewingFriend?.tankList?.length ?? 0
       : this.playerData?.tankList?.length ?? 0;
+
+    const inTomb = !!this.tombTankNode?.active;
+    const inFriend = this.isViewingFriend && !inTomb;
+    const inSelf = !this.isViewingFriend && !inTomb;
 
     this.tankButtons.forEach((btn, i) => {
       const n = btn.node;
@@ -786,10 +811,29 @@ export class GameManager extends Component {
       const unlocked = i < totalOpened;
 
       // 鎖頭顯示
-      const lockNode = n.getChildByName("padlock");
+      const lockNode = n.getChildByName("Padlock");
       if (lockNode) lockNode.active = !unlocked;
 
-      // 是否可點
+      // 星星顯示
+      const starNode = n.getChildByName("Star");
+      if (starNode) {
+        let showStar = false;
+
+        if (inSelf) {
+          // 自己的缸：用 currentTankId（1-based）
+          showStar = unlocked && i + 1 === this.currentTankId;
+        } else if (inFriend) {
+          // 朋友的缸：用 friendCurrentTankIndex（0-based）
+          showStar = unlocked && i === this.friendCurrentTankIndex;
+        } else {
+          // 在墓地畫面時，不顯示任何缸的星星
+          showStar = false;
+        }
+
+        starNode.active = showStar;
+      }
+
+      // 是否可點：維持原本邏輯（墓地也可以直接點回某一缸）
       btn.interactable = unlocked;
     });
   }
@@ -1323,7 +1367,6 @@ export class GameManager extends Component {
       .filter((f) => f && !f.isDead) as typeof this.playerData.fishList;
   }
 
-  
   /** 是否有尚未復活的死亡魚（全帳號） */
   private hasDeadFish(): boolean {
     return !!this.playerData?.fishList.some((f) => f.isDead);
