@@ -41,12 +41,12 @@
       "userData": {
         "trimThreshold": 1,
         "rotated": false,
-        "offsetX": -5,
-        "offsetY": -2.5,
+        "offsetX": 0,
+        "offsetY": 0,
         "trimX": 0,
-        "trimY": 6,
-        "width": 1014,
-        "height": 1017,
+        "trimY": 0,
+        "width": 1024,
+        "height": 1024,
         "rawWidth": 1024,
         "rawHeight": 1024,
         "borderTop": 0,
@@ -60,17 +60,17 @@
         "meshType": 0,
         "vertices": {
           "rawPosition": [
-            -507,
-            -508.5,
+            -512,
+            -512,
             0,
-            507,
-            -508.5,
+            512,
+            -512,
             0,
-            -507,
-            508.5,
+            -512,
+            512,
             0,
-            507,
-            508.5,
+            512,
+            512,
             0
           ],
           "indexes": [
@@ -83,39 +83,39 @@
           ],
           "uv": [
             0,
-            1018,
-            1014,
-            1018,
+            1024,
+            1024,
+            1024,
             0,
-            1,
-            1014,
-            1
+            0,
+            1024,
+            0
           ],
           "nuv": [
             0,
-            0.0009765625,
-            0.990234375,
-            0.0009765625,
             0,
-            0.994140625,
-            0.990234375,
-            0.994140625
+            1,
+            0,
+            0,
+            1,
+            1,
+            1
           ],
           "minPos": [
-            -507,
-            -508.5,
+            -512,
+            -512,
             0
           ],
           "maxPos": [
-            507,
-            508.5,
+            512,
+            512,
             0
           ]
         },
         "isUuid": true,
         "imageUuidOrDatabaseUri": "cfeefcbe-454e-4d58-af74-836d52a03985@6c48a",
         "atlasUuid": "",
-        "trimType": "auto"
+        "trimType": "none"
       },
       "ver": "1.0.12",
       "imported": true,
