@@ -23,7 +23,7 @@ import { TombManager } from "./TombManager";
 import { TankEnvironmentManager } from "./TankEnvironmentManager";
 import { showFloatingTextCenter } from "./utils/UIUtils";
 import { initLiff, getIdentity } from "./bridge/LiffBridge";
-import { authWithLine } from "./api/Api";
+import { authWithLine, createLinePayOrder } from "./api/Api";
 import { ConfirmDialogManager } from "./ConfirmDialogManager";
 import { DecorationEditor } from "./decoration/DecorationEditor";
 import { FishFamilyService, IGameAdapter } from "./marry/FishFamilyService";
@@ -32,7 +32,7 @@ import { BackgroundAnimator } from "./decoration/BackgroundAnimator";
 
 const { ccclass, property } = _decorator;
 
-// -----------------------------常數 / 類別屬性--------------------------------
+//#region 常數 / 靜態資源
 const LIFF_ID = "2007937783-PJ4ZRBdY";
 const RED = new Color(255, 0, 0, 255); // 紅色
 const GREEN = new Color(120, 198, 80, 255); // 綠色
@@ -45,9 +45,12 @@ const TankAssets = {
   backgrounds: new Map<string, SpriteFrame>(),
   decorations: new Map<string, Prefab>(),
 };
+//#endregion
 
 @ccclass("GameManager")
 export class GameManager extends Component {
+  //#region 欄位
+
   @property(Node) floatingNode: Node = null!; // 提示浮動訊息
   @property(ConfirmDialogManager) confirmDialogManager: ConfirmDialogManager = null!;
   @property(TombManager) tombManager: TombManager = null!;
@@ -65,53 +68,61 @@ export class GameManager extends Component {
   @property(Node) tombTankNode: Node = null!; // 墓地魚缸節點
 
   // 顯示玩家資料
-  @property(Label) userNameLabel: Label = null!; // 龍骨數量
-  @property(Label) gameIdLabel: Label = null!; // 使用者ID
-  @property(Sprite) userAvatar: Sprite = null!; // 使用者頭貼
-  @property(SpriteFrame) defaultAvatar: SpriteFrame = null!; // 預設頭貼
-  @property(Label) dragonboneLabel: Label = null!; // 龍骨數量
-  @property(Label) fishCountLabel: Label = null!; // 魚數量
+  @property(Label) userNameLabel: Label = null!;
+  @property(Label) gameIdLabel: Label = null!;
+  @property(Sprite) userAvatar: Sprite = null!;
+  @property(SpriteFrame) defaultAvatar: SpriteFrame = null!;
+  @property(Label) dragonboneLabel: Label = null!;
+  @property(Label) fishCountLabel: Label = null!;
 
   // 環境資訊
-  @property(Label) temperatureLabel: Label = null!; // 溫度顯示
-  @property(Label) waterQualityLabel: Label = null!; // 水質顯示
-  @property minComfortTemp: number = 18; // 最低舒適溫度
-  @property maxComfortTemp: number = 23; // 最高舒適溫度
+  @property(Label) temperatureLabel: Label = null!;
+  @property(Label) waterQualityLabel: Label = null!;
+  @property minComfortTemp: number = 18;
+  @property maxComfortTemp: number = 23;
 
   // 道具
-  @property(Button) heaterBtn: Button = null!; // 加熱器按鈕
-  @property(Button) fanBtn: Button = null!; // 風扇按鈕
-  @property(Button) brushBtn: Button = null!; // 魚缸刷按鈕
-  @property(Label) heaterCountLabel: Label = null!; // 加熱器數量
-  @property(Label) fanCountLabel: Label = null!; // 風扇數量
-  @property(Label) brushCountLabel: Label = null!; // 魚缸刷數量
+  @property(Button) heaterBtn: Button = null!;
+  @property(Button) fanBtn: Button = null!;
+  @property(Button) brushBtn: Button = null!;
+  @property(Label) heaterCountLabel: Label = null!;
+  @property(Label) fanCountLabel: Label = null!;
+  @property(Label) brushCountLabel: Label = null!;
 
   // 環境效果
-  @property(Node) dirtyWaterOverlay: Node = null!; // 髒
-  @property(Node) coldOverlay: Node = null!; // 冷
-  @property(Node) hotOverlay: Node = null!; // 熱
+  @property(Node) dirtyWaterOverlay: Node = null!;
+  @property(Node) coldOverlay: Node = null!;
+  @property(Node) hotOverlay: Node = null!;
 
-  // 簽到相關
+  // 簽到
   @property(Button) singInBtn: Button = null!;
   @property(Node) signInPanel: Node = null!;
 
   // 提示面板
-  @property(Node) noticePanel: Node = null!; // 通知面板
-  @property(Label) noticeLabel: Label = null!; // 通知面板文字
-  @property(Button) noticeCloseBtn: Button = null!; // 通知面板關閉按鈕
-  @property(Node) tombHintPanel: Node = null!; // 墓地提示面板
-  @property(Button) tombHintCloseBtn: Button = null!; // 墓地提示關閉按鈕
+  @property(Node) noticePanel: Node = null!;
+  @property(Label) noticeLabel: Label = null!;
+  @property(Button) noticeCloseBtn: Button = null!;
+  @property(Node) tombHintPanel: Node = null!;
+  @property(Button) tombHintCloseBtn: Button = null!;
 
-  @property(Button) backToMyTankBtn: Button = null!; // 返回自己魚缸按鈕
+  // 其他 UI
+  @property(Button) backToMyTankBtn: Button = null!;
   @property(Button) mailBoxBtn: Button = null!;
-  @property(Node) mailboxRedDot: Node = null!; // Mail未讀紅點點
-  @property(Button) addFishBtn: Button = null!; // 加魚按鈕
-
-  @property(Label) tankFishCountLabel: Label = null!; // 顯示魚數量/上限
-
-  @property(Button) decorEditBtn: Button = null!; // 「裝飾」編輯按鈕（只在自己缸顯示）
+  @property(Node) mailboxRedDot: Node = null!;
+  @property(Button) addFishBtn: Button = null!;
+  @property(Label) tankFishCountLabel: Label = null!;
+  @property(Button) decorEditBtn: Button = null!;
   @property(DecorationEditor) decorEditor: DecorationEditor = null!;
 
+  // 儲值相關
+  @property(Button) rechargeBtn: Button = null!;
+  @property(Node) rechargePanel: Node = null!; // 選方案面板
+  @property(Button) plan1Btn: Button = null!; // 方案1 按鈕
+  @property(Button) plan2Btn: Button = null!; // 方案2 按鈕
+  @property(Button) plan3Btn: Button = null!; // 方案3 按鈕
+  //#endregion
+
+  //#region 內部狀態欄位
   private currentTankId: number = 1; // 當前自己的魚缸 ID
   private friendCurrentTankIndex: number = 0; // 當前正在看的朋友魚缸 index（0-based）
   private offDMChange: (() => void) | null = null;
@@ -123,6 +134,8 @@ export class GameManager extends Component {
   > | null = null;
   private lastNoticeType: "none" | "death" | "env" = "none";
   private family!: FishFamilyService;
+  private _breedingInProgress = false;
+  private friendSnapshot: PlayerData[] = [];
 
   // 第六階成魚型態的順序（要和 Inspector 中兩個 Prefab 陣列順序完全一致）
   private readonly ADULT_FORM_ORDER: FishData["adultForm"][] = [
@@ -131,7 +144,9 @@ export class GameManager extends Component {
     "form3", // 胖鯉魚
     "form4", // 骨頭魚
   ];
+  //#endregion
 
+  //#region 共用小工具
   private getAdultFormDisplayName(form?: FishData["adultForm"]): string {
     const map: Record<string, string> = {
       form1: "Normal",
@@ -147,11 +162,28 @@ export class GameManager extends Component {
     return TankAssets.decorations?.get(id);
   }
 
-  private _breedingInProgress = false;
-  private friendSnapshot: PlayerData[] = [];
-  // -----------------------------生命週期 / 啟動流程--------------------------------
+  private formToIndex(form: FishData["adultForm"]): number {
+    const i = this.ADULT_FORM_ORDER.indexOf(form || "form1");
+    return i >= 0 ? i : 0;
+  }
+
+  private pickAdultForm(fish: FishData, player: PlayerData): FishData["adultForm"] {
+    // 等機率版本；若要做稀有度，可把 weights 換成你要的權重
+    const forms = this.ADULT_FORM_ORDER;
+    const i = Math.floor(Math.random() * forms.length);
+    return forms[i];
+  }
+
+  public getMyPlayer(): PlayerData {
+    return this.playerData!;
+  }
+
+  public getCurrentTankId(): number {
+    return this.currentTankId;
+  }
+  //#endregion
+  //#region 生命週期、啟動流程
   async onLoad() {
-    // === Marriage/Breeding Adapter START ===
     const adapter: IGameAdapter = {
       // 回傳我的玩家資料
       getMyPlayer: () => this.playerData!,
@@ -404,7 +436,42 @@ export class GameManager extends Component {
       });
     });
   }
-  // -----------------------------UI 初始化--------------------------------
+
+  /** 預載背景 */
+  private async preloadBackgroundSpriteFrames() {
+    return new Promise<void>((resolve) => {
+      resources.loadDir("backgrounds", SpriteFrame, (err, list) => {
+        if (!err && list) {
+          list.forEach((sf) => TankAssets.backgrounds.set(sf.name, sf)); // sf.name 如：bg_sandy
+        } else {
+          console.warn("[BG] 沒載到 backgrounds：", err);
+        }
+        resolve();
+      });
+    });
+  }
+
+  /** 針對舊資料補預設值 + 規則初始化 */
+  private async initCapsAndRules() {
+    if (!this.playerData) return;
+
+    // 為每個缸補 capacity：第一缸預設3，其它缸預設6
+    for (const tank of this.playerData.tankList) {
+      if (tank.capacity == null) {
+        tank.capacity = tank.id === 1 ? 3 : 6;
+      }
+    }
+
+    // 若當前只有第一缸，且已達「3隻≥3階」，就把第一缸容量升到6
+    await this.checkAndUnlockCapacityForFirstTank();
+
+    // 若符合開新缸條件，幫玩家補開（最多到3缸）
+    await this.checkAndUnlockNextTankIfEligible(1); // 先看第一缸
+    await this.checkAndUnlockNextTankIfEligible(2); // 若已經有第二缸，也檢查第二缸
+  }
+  //#endregion
+
+  //#region UI初始化、Mailbox
 
   /** 初始化所有按鈕事件 */
   initButtons() {
@@ -438,6 +505,26 @@ export class GameManager extends Component {
     this.addFishBtn.node.on(Node.EventType.TOUCH_END, async () => {
       await this.onClickAddFish();
     });
+
+    // 大顆「儲值」按鈕：只負責打開方案面板
+    this.rechargeBtn?.node.on(Node.EventType.TOUCH_END, () => {
+      if (this.rechargePanel) {
+        this.rechargePanel.active = true;
+      }
+    });
+
+    // 三個方案按鈕：各自帶對應的 planId
+    this.plan1Btn?.node.on(Node.EventType.TOUCH_END, () => {
+      this.onClickRecharge("small"); // 方案1
+    });
+
+    this.plan2Btn?.node.on(Node.EventType.TOUCH_END, () => {
+      this.onClickRecharge("medium"); // 方案2
+    });
+
+    this.plan3Btn?.node.on(Node.EventType.TOUCH_END, () => {
+      this.onClickRecharge("large"); // 方案3
+    });
   }
 
   /** 初始化面板事件與狀態 */
@@ -461,6 +548,11 @@ export class GameManager extends Component {
 
     // 隱藏返回按鈕
     if (this.backToMyTankBtn) this.backToMyTankBtn.node.active = false;
+
+    // 儲值方案面板一開始先隱藏
+    if (this.rechargePanel) {
+      this.rechargePanel.active = false;
+    }
   }
 
   /** 收到 MailboxPanel 廣播時的處理 */
@@ -486,8 +578,9 @@ export class GameManager extends Component {
       this.mailboxRedDot.active = unread > 0;
     }
   }
+  //#endregion
 
-  // -----------------------------場景切換與渲染--------------------------------
+  //#region 場景切換
 
   private getActiveViewport(): Node {
     return this.activeTankViewport ?? this.node; // 總是用共用視窗來畫
@@ -594,20 +687,6 @@ export class GameManager extends Component {
 
       fishArea.addChild(node);
     }
-  }
-
-  /** 預載背景 */
-  private async preloadBackgroundSpriteFrames() {
-    return new Promise<void>((resolve) => {
-      resources.loadDir("backgrounds", SpriteFrame, (err, list) => {
-        if (!err && list) {
-          list.forEach((sf) => TankAssets.backgrounds.set(sf.name, sf)); // sf.name 如：bg_sandy
-        } else {
-          console.warn("[BG] 沒載到 backgrounds：", err);
-        }
-        resolve();
-      });
-    });
   }
 
   /** 顯示自己的缸 */
@@ -853,8 +932,103 @@ export class GameManager extends Component {
     }
   }
 
-  // -----------------------------每日流程 / 環境顯示--------------------------------
+  /** 生成魚的實體節點 */
+  async spawnFishInTank(tankId: number) {
+    this.fishArea.removeAllChildren(); // 清除上一缸魚
+    const tank = this.playerData.tankList.find((t) => t.id === tankId);
+    if (!tank) {
+      console.warn(`找不到魚缸 ${tankId}`);
+      return;
+    }
 
+    const fishAreaTransform = this.fishArea.getComponent(UITransform);
+    const width = fishAreaTransform.width;
+    const height = fishAreaTransform.height;
+    const margin = 50;
+
+    for (const fishId of tank.fishIds) {
+      const fish = this.playerData.fishList.find((f) => f.id === fishId);
+      if (!fish || fish.isDead) continue;
+
+      let prefab =
+        fish.gender === "female"
+          ? this.femaleFishPrefabsByStage[fish.stage - 1]
+          : this.maleFishPrefabsByStage[fish.stage - 1];
+
+      if (!prefab) continue;
+
+      const fishNode = instantiate(prefab);
+      fishNode.name = `Fish_${fish.id}`;
+
+      // 隨機位置與方向
+      const randX = Math.random() * (width - margin * 2) - (width / 2 - margin);
+      const randY = Math.random() * (height - margin * 2) - (height / 2 - margin);
+      const direction = Math.random() > 0.5 ? 1 : -1;
+
+      fishNode.setPosition(randX, randY, 0);
+      fishNode.setScale(new Vec3(direction, 1, 1));
+      fishNode["initialDirection"] = direction;
+
+      const swimmingFish = fishNode.getComponent(SwimmingFish);
+      swimmingFish?.setFishData(fish);
+
+      this.fishArea.addChild(fishNode);
+    }
+
+    this.currentTankId = tankId;
+  }
+
+  /** 替換Prefab(變性用) */
+  replaceFishNode(fishData: any): Node {
+    // 找出原本節點
+    const oldFishNode = this.fishArea.getChildByName(`Fish_${fishData.id}`);
+    if (!oldFishNode) {
+      console.warn(`找不到原魚節點 Fish_${fishData.id}`);
+      return null!;
+    }
+    const oldPos = oldFishNode.getPosition();
+    const direction = oldFishNode["initialDirection"] ?? 1;
+    oldFishNode.destroy();
+
+    // 根據性別與階段取得 prefab
+    const stageIndex = fishData.stage - 1;
+    let prefab: Prefab | undefined;
+
+    if (fishData.stage === 6 && fishData.adultForm) {
+      const formIndex = this.formToIndex(fishData.adultForm);
+      prefab =
+        fishData.gender === "female" ? this.femaleStage6FormPrefabs[formIndex] : this.maleStage6FormPrefabs[formIndex];
+    } else {
+      prefab =
+        fishData.gender === "male"
+          ? this.maleFishPrefabsByStage[stageIndex]
+          : this.femaleFishPrefabsByStage[stageIndex];
+    }
+
+    if (!prefab) {
+      console.warn(`找不到對應魚 prefab：stage=${fishData.stage}, gender=${fishData.gender}`);
+      return null!;
+    }
+
+    const newFishNode = instantiate(prefab);
+    newFishNode.name = `Fish_${fishData.id}`;
+    newFishNode.setPosition(oldPos);
+    newFishNode["initialDirection"] = direction;
+    newFishNode.setScale(new Vec3(direction, 1, 1));
+
+    this.fishArea.addChild(newFishNode);
+
+    const swimmingFish = newFishNode.getComponent(SwimmingFish);
+    if (swimmingFish) {
+      swimmingFish.setFishData(fishData);
+      swimmingFish.onClickFish?.(); // 讓這隻魚自動成為目前選中的魚
+    }
+
+    return newFishNode;
+  }
+  //#endregion
+
+  //#region 每日流程
   /** 處理魚飢餓與成長 */
   async processDailyUpdate() {
     // 取得資料與時間計算
@@ -1113,8 +1287,8 @@ export class GameManager extends Component {
     this.noticeLabel.string = message;
     this.noticePanel.active = true;
   }
-
-  // -----------------------------道具使用--------------------------------
+  //#endregion
+  //#region 道具使用
 
   /** 使用加熱器（點擊） */
   async onClickHeater() {
@@ -1239,124 +1413,9 @@ export class GameManager extends Component {
     await this.refreshEnvironmentUI();
     showFloatingTextCenter(this.floatingNode, "已清潔魚缸");
   }
+  //#endregion
 
-  // -----------------------------魚的呈現 / 節點替換--------------------------------
-
-  /** 生成魚的實體節點 */
-  async spawnFishInTank(tankId: number) {
-    this.fishArea.removeAllChildren(); // 清除上一缸魚
-    const tank = this.playerData.tankList.find((t) => t.id === tankId);
-    if (!tank) {
-      console.warn(`找不到魚缸 ${tankId}`);
-      return;
-    }
-
-    const fishAreaTransform = this.fishArea.getComponent(UITransform);
-    const width = fishAreaTransform.width;
-    const height = fishAreaTransform.height;
-    const margin = 50;
-
-    for (const fishId of tank.fishIds) {
-      const fish = this.playerData.fishList.find((f) => f.id === fishId);
-      if (!fish || fish.isDead) continue;
-
-      let prefab =
-        fish.gender === "female"
-          ? this.femaleFishPrefabsByStage[fish.stage - 1]
-          : this.maleFishPrefabsByStage[fish.stage - 1];
-
-      if (!prefab) continue;
-
-      const fishNode = instantiate(prefab);
-      fishNode.name = `Fish_${fish.id}`;
-
-      // 隨機位置與方向
-      const randX = Math.random() * (width - margin * 2) - (width / 2 - margin);
-      const randY = Math.random() * (height - margin * 2) - (height / 2 - margin);
-      const direction = Math.random() > 0.5 ? 1 : -1;
-
-      fishNode.setPosition(randX, randY, 0);
-      fishNode.setScale(new Vec3(direction, 1, 1));
-      fishNode["initialDirection"] = direction;
-
-      const swimmingFish = fishNode.getComponent(SwimmingFish);
-      swimmingFish?.setFishData(fish);
-
-      this.fishArea.addChild(fishNode);
-    }
-
-    this.currentTankId = tankId;
-  }
-
-  /** 替換Prefab(變性用) */
-  replaceFishNode(fishData: any): Node {
-    // 找出原本節點
-    const oldFishNode = this.fishArea.getChildByName(`Fish_${fishData.id}`);
-    if (!oldFishNode) {
-      console.warn(`找不到原魚節點 Fish_${fishData.id}`);
-      return null!;
-    }
-    const oldPos = oldFishNode.getPosition();
-    const direction = oldFishNode["initialDirection"] ?? 1;
-    oldFishNode.destroy();
-
-    // 根據性別與階段取得 prefab
-    const stageIndex = fishData.stage - 1;
-    let prefab: Prefab | undefined;
-
-    if (fishData.stage === 6 && fishData.adultForm) {
-      const formIndex = this.formToIndex(fishData.adultForm);
-      prefab =
-        fishData.gender === "female" ? this.femaleStage6FormPrefabs[formIndex] : this.maleStage6FormPrefabs[formIndex];
-    } else {
-      prefab =
-        fishData.gender === "male"
-          ? this.maleFishPrefabsByStage[stageIndex]
-          : this.femaleFishPrefabsByStage[stageIndex];
-    }
-
-    if (!prefab) {
-      console.warn(`找不到對應魚 prefab：stage=${fishData.stage}, gender=${fishData.gender}`);
-      return null!;
-    }
-
-    const newFishNode = instantiate(prefab);
-    newFishNode.name = `Fish_${fishData.id}`;
-    newFishNode.setPosition(oldPos);
-    newFishNode["initialDirection"] = direction;
-    newFishNode.setScale(new Vec3(direction, 1, 1));
-
-    this.fishArea.addChild(newFishNode);
-
-    const swimmingFish = newFishNode.getComponent(SwimmingFish);
-    if (swimmingFish) {
-      swimmingFish.setFishData(fishData);
-      swimmingFish.onClickFish?.(); // 讓這隻魚自動成為目前選中的魚
-    }
-
-    return newFishNode;
-  }
-
-  // -----------------------------成長/解鎖規則--------------------------------
-
-  /** 針對舊資料補預設值 + 規則初始化 */
-  private async initCapsAndRules() {
-    if (!this.playerData) return;
-
-    // 為每個缸補 capacity：第一缸預設3，其它缸預設6
-    for (const tank of this.playerData.tankList) {
-      if (tank.capacity == null) {
-        tank.capacity = tank.id === 1 ? 3 : 6;
-      }
-    }
-
-    // 若當前只有第一缸，且已達「3隻≥3階」，就把第一缸容量升到6
-    await this.checkAndUnlockCapacityForFirstTank();
-
-    // 若符合開新缸條件，幫玩家補開（最多到3缸）
-    await this.checkAndUnlockNextTankIfEligible(1); // 先看第一缸
-    await this.checkAndUnlockNextTankIfEligible(2); // 若已經有第二缸，也檢查第二缸
-  }
+  //#region 成長解鎖規則
 
   /** 取某缸的 Fish 物件陣列（排除死亡） */
   private getAliveFishInTank(tankId: number) {
@@ -1419,20 +1478,8 @@ export class GameManager extends Component {
     await DataManager.savePlayerDataWithCache(this.playerData);
     showFloatingTextCenter(this.floatingNode, `成功開啟第 ${newTankId} 缸！`);
   }
-
-  private formToIndex(form: FishData["adultForm"]): number {
-    const i = this.ADULT_FORM_ORDER.indexOf(form || "form1");
-    return i >= 0 ? i : 0;
-  }
-
-  private pickAdultForm(fish: FishData, player: PlayerData): FishData["adultForm"] {
-    // 等機率版本；若要做稀有度，可把 weights 換成你要的權重
-    const forms = this.ADULT_FORM_ORDER;
-    const i = Math.floor(Math.random() * forms.length);
-    return forms[i];
-  }
-
-  // -----------------------------加魚行為--------------------------------
+  //#endregion
+  //#region 加魚行為
 
   /** 建立一條新魚（最簡版） */
   private createFish(tankId: number) {
@@ -1582,7 +1629,9 @@ export class GameManager extends Component {
       this.switchTank(index + 1);
     }
   }
+  //#endregion
 
+  //#region 婚姻、繁殖
   public async marryFish(myFishId: number, partnerFishId: number, partnerOwnerGameId: string) {
     console.log("[GM] marryFish", { myFishId, partnerFishId, partnerOwnerGameId });
     const ok = await this.family.marry(myFishId, this.playerData!.gameId, partnerFishId, partnerOwnerGameId);
@@ -1626,11 +1675,31 @@ export class GameManager extends Component {
       this._breedingInProgress = false;
     }
   }
+  //#endregion
 
-  public getMyPlayer(): PlayerData {
-    return this.playerData!;
+  //#region 儲值
+  private async onClickRecharge(planId: "small" | "medium" | "large") {
+    try {
+      if (!this.playerData) {
+        showFloatingTextCenter(this.floatingNode, "玩家資料尚未載入");
+        return;
+      }
+
+      // 呼叫後端建立 LINE Pay 訂單，帶入不同方案
+      const res = await createLinePayOrder(this.playerData.userId, planId);
+      const paymentUrl = res.paymentUrl;
+
+      // 面板可以關閉（避免還停在畫面上）
+      if (this.rechargePanel) {
+        this.rechargePanel.active = false;
+      }
+
+      // 在 LIFF / 瀏覽器裡直接導向 LINE Pay 付款頁
+      window.location.href = paymentUrl;
+    } catch (e) {
+      console.error("[Recharge] error:", e);
+      showFloatingTextCenter(this.floatingNode, "建立付款失敗，請稍後再試");
+    }
   }
-  public getCurrentTankId(): number {
-    return this.currentTankId;
-  }
+  //#endregion
 }

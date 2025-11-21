@@ -1,26 +1,40 @@
-require('dotenv').config();
-const fetch = require('node-fetch');          // 用於呼叫 LINE API（Node 18 也可用內建 fetch）
-const express = require('express');
-const cors = require('cors');
-const { MongoClient } = require('mongodb');
-const path = require('path');
-const { v4: uuid } = require('uuid');
+require("dotenv").config();
+const crypto = require("crypto"); // 用來產生 HMAC-SHA256 簽名
+const LINE_PAY_CHANNEL_ID = process.env.LINE_PAY_CHANNEL_ID;
+const LINE_PAY_CHANNEL_SECRET = process.env.LINE_PAY_CHANNEL_SECRET;
+const LINE_PAY_IS_SANDBOX = process.env.LINE_PAY_IS_SANDBOX === "true";
+const LINE_PAY_BASE_URL = LINE_PAY_IS_SANDBOX ? "https://sandbox-api-pay.line.me" : "https://api-pay.line.me";
+const GAME_LIFF_URL = "http://localhost:7456/?dev=1&uid=Ud485f013281533514e4fb9935be5885f"; //https://liff.line.me/2007937783-PJ4ZRBdY
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
+const fetch = require("node-fetch"); 
+const express = require("express");
+const cors = require("cors");
+const { MongoClient } = require("mongodb");
+const path = require("path");
+const { v4: uuid } = require("uuid");
 const FRIEND_LIMIT = 30; // 好友上限
 const app = express();
-app.use(cors());             // 開啟跨來源資源共用（CORS）
-app.use(express.json());     // 處理 JSON 請求
+app.use(cors()); // 開啟跨來源資源共用（CORS）
+app.use(express.json()); // 處理 JSON 請求
+
+// 儲值方案（之後要改只改這裡就好）
+const TOPUP_PLANS = {
+  small: { amount: 50, bones: 1500, label: "方案1：1500 龍骨" },
+  medium: { amount: 100, bones: 3500, label: "方案2：3500 龍骨" },
+  large: { amount: 200, bones: 7500, label: "方案3：7500 龍骨" },
+};
 
 // ------------------- 靜態檔案設定 -------------------
 // 把 public/web-mobile 當作網站根目錄
-app.use(express.static(path.join(__dirname, 'public', 'web-mobile')));
+app.use(express.static(path.join(__dirname, "public", "web-mobile")));
 
 // 設定 / 預設回傳 index.html
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'web-mobile', 'index.html'));
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "web-mobile", "index.html"));
 });
 
 // ------------------- MongoDB 連線 -------------------
-const uri = 'mongodb://127.0.0.1:27017';
+const uri = "mongodb://127.0.0.1:27017";
 const client = new MongoClient(uri);
 
 // 宣告 Collections
@@ -29,35 +43,37 @@ let db, users, quiz, friendRequests, mails;
 // 初始化資料庫
 async function initDB() {
   await client.connect();
-  db = client.db('Sturgeon-Game');
-  users = db.collection('users');
-  quiz = db.collection('quiz-questions');
-  friendRequests = db.collection('friend_requests');
-  mails = db.collection('mails');
+  db = client.db("Sturgeon-Game");
+  users = db.collection("users");
+  quiz = db.collection("quiz-questions");
+  friendRequests = db.collection("friend_requests");
+  mails = db.collection("mails");
 
   // 索引
   await users.createIndex({ userId: 1 }, { unique: true });
   await friendRequests.createIndex({ toUserId: 1, status: 1, createdAt: -1 });
   await friendRequests.createIndex({ fromUserId: 1, status: 1, createdAt: -1 });
   await mails.createIndex({ userId: 1, status: 1, createdAt: -1 });
-  await users.createIndex(
-    { gameId: 1 },
-    { unique: true, partialFilterExpression: { gameId: { $type: "string" } } }
-  );
+  await users.createIndex({ gameId: 1 }, { unique: true, partialFilterExpression: { gameId: { $type: "string" } } });
 
-  console.log('MongoDB 連線成功');
+  console.log("MongoDB 連線成功");
 }
 initDB();
 
-// ------------------- 函式 -------------------
+//#region 函式 
+function generateLinePaySignature(uri, body, nonce) {
+  const bodyStr = typeof body === "string" ? body : JSON.stringify(body);
+  const message = LINE_PAY_CHANNEL_SECRET + uri + bodyStr + nonce;
+  return crypto.createHmac("sha256", LINE_PAY_CHANNEL_SECRET).update(message, "utf8").digest("base64");
+}
 
 /** 發送 Mail */
 async function sendMail(toUserId, mail) {
   // mail: { type, title, body, fromUser, payload }
   const mailDoc = {
-    mailId: 'M_' + uuid(),
+    mailId: "M_" + uuid(),
     userId: toUserId,
-    status: 'unread',
+    status: "unread",
     createdAt: new Date(),
     ...mail,
   };
@@ -70,7 +86,7 @@ function getWeekStartKey(date = new Date(), tzOffsetMinutes = 480) {
   const shifted = new Date(date.getTime() + tzOffsetMinutes * 60_000);
   const d = new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate()));
   const dow = (d.getUTCDay() + 6) % 7; // Mon=0..Sun=6
-  d.setUTCDate(d.getUTCDate() - dow);  // 回到本週一
+  d.setUTCDate(d.getUTCDate() - dow); // 回到本週一
   return d.toISOString().slice(0, 10); // "YYYY-MM-DD"
 }
 
@@ -86,7 +102,7 @@ async function generateGameId() {
 /** 建立新玩家的預設資料 */
 async function buildDefaultPlayer(userId, displayName, picture) {
   const now = new Date();
-  const today = now.toISOString().split('T')[0];
+  const today = now.toISOString().split("T")[0];
 
   // 預設擁有 3 隻魚
   const fishList = [];
@@ -95,8 +111,8 @@ async function buildDefaultPlayer(userId, displayName, picture) {
       id: i,
       name: `鱘龍${i}號`,
       gender: i % 2 === 0 ? "female" : "male",
-      stage: 2,                 // 你現在測試用
-      growthDaysPassed: 14,     // 你現在測試用
+      stage: 2, // 你現在測試用
+      growthDaysPassed: 14, // 你現在測試用
       lastFedDate: now.toISOString(),
       hunger: 33,
       hungerRateMultiplier: 1.0,
@@ -107,7 +123,7 @@ async function buildDefaultPlayer(userId, displayName, picture) {
       status: { hungry: false, hot: false, cold: false, sick: false },
       emotion: "happy",
       isDead: false,
-      tankId: 1
+      tankId: 1,
     });
   }
 
@@ -129,7 +145,7 @@ async function buildDefaultPlayer(userId, displayName, picture) {
       lastCleanTime: now.toISOString(),
       isTemperatureDanger: false,
       loginDaysSinceClean: 0,
-      badEnvLoginDays: 0
+      badEnvLoginDays: 0,
     },
     inventory: {
       feeds: { normal: 666, premium: 66 },
@@ -141,8 +157,8 @@ async function buildDefaultPlayer(userId, displayName, picture) {
         changePotion: 10,
         heater: 10,
         fan: 15,
-        brush: 17
-      }
+        brush: 17,
+      },
     },
     fashion: { owned: [] },
     signInData: {
@@ -150,27 +166,28 @@ async function buildDefaultPlayer(userId, displayName, picture) {
         weekKey: getWeekStartKey(),
         daysSigned: [false, false, false, false, false, false, false],
         questionsCorrect: [false, false, false, false, false, false, false],
-        lastSignDate: ""
+        lastSignDate: "",
       },
       monthly: {
         month: now.getMonth() + 1,
         year: now.getFullYear(),
         signedDaysCount: 0,
-        lastSignDate: ""
-      }
+        lastSignDate: "",
+      },
     },
     friends: [],
-    createdAt: now
+    createdAt: now,
   };
 }
+//#endregion
 
-// ------------------- 玩家資料 API -------------------
+//#region 玩家資料 API
 
 /** 取得玩家資料 */
-app.get('/player/:userId', async (req, res) => {
+app.get("/player/:userId", async (req, res) => {
   const id = req.params.userId?.trim();
   let user = await users.findOne({ userId: id });
-  if (!user) return res.status(404).json({ error: 'not found' });
+  if (!user) return res.status(404).json({ error: "not found" });
 
   // 若缺少 gameId，自動補（避免前端顯示空白）
   if (!user.gameId) {
@@ -182,20 +199,19 @@ app.get('/player/:userId', async (req, res) => {
   res.json(user);
 });
 
-
 /** 新增玩家 */
-app.post('/player', async (req, res) => {
+app.post("/player", async (req, res) => {
   const newPlayer = req.body;
   const existing = await users.findOne({ userId: newPlayer.userId });
   if (existing) {
-    return res.status(400).send('Player already exists');
+    return res.status(400).send("Player already exists");
   }
   await users.insertOne(newPlayer);
   res.json({ success: true });
 });
 
 /** 更新玩家資料 */
-app.put('/player/:userId', async (req, res) => {
+app.put("/player/:userId", async (req, res) => {
   const id = req.params.userId?.trim();
   const updateData = { ...req.body };
 
@@ -206,10 +222,10 @@ app.put('/player/:userId', async (req, res) => {
   try {
     // 先確認這個玩家存在
     const exists = await users.findOne({ userId: id });
-    console.log('[PUT /player]', { id, exists: !!exists });
+    console.log("[PUT /player]", { id, exists: !!exists });
 
     if (!exists) {
-      return res.status(404).json({ error: 'not found', id });
+      return res.status(404).json({ error: "not found", id });
     }
 
     // 執行更新（整份 document 的覆寫式 $set）
@@ -219,42 +235,44 @@ app.put('/player/:userId', async (req, res) => {
     const fresh = await users.findOne({ userId: id });
     return res.json(fresh);
   } catch (err) {
-    console.error('[PUT /player] error:', err);
-    return res.status(500).json({ error: 'server_error' });
+    console.error("[PUT /player] error:", err);
+    return res.status(500).json({ error: "server_error" });
   }
 });
+//#endregion
 
-// ------------------- 題庫 API -------------------
+//#region 題庫 API
 
 /** 取得所有題目 */
-app.get('/quiz', async (req, res) => {
+app.get("/quiz", async (req, res) => {
   const questions = await quiz.find().toArray();
   res.json(questions);
 });
+//#endregion
 
-// ------------------- LINE 登入 API -------------------
-app.post('/auth/line', async (req, res) => {
+//#region LINE 登入 API
+app.post("/auth/line", async (req, res) => {
   const { idToken } = req.body;
-  if (!idToken) return res.status(400).json({ error: 'missing idToken' });
+  if (!idToken) return res.status(400).json({ error: "missing idToken" });
 
   try {
-    const r = await fetch('https://api.line.me/oauth2/v2.1/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    const r = await fetch("https://api.line.me/oauth2/v2.1/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         id_token: idToken,
         client_id: process.env.LINE_LOGIN_CHANNEL_ID,
-      })
+      }),
     });
     const data = await r.json();
     if (!r.ok || !data.sub) {
-      console.error('LINE verify 失敗：', data);
-      return res.status(401).json({ error: 'invalid idToken', detail: data });
+      console.error("LINE verify 失敗：", data);
+      return res.status(401).json({ error: "invalid idToken", detail: data });
     }
 
     const lineUserId = data.sub;
-    const displayName = data.name || '玩家';
-    const picture = data.picture || '';
+    const displayName = data.name || "玩家";
+    const picture = data.picture || "";
 
     let user = await users.findOne({ userId: lineUserId });
     const isNew = !user;
@@ -294,21 +312,212 @@ app.post('/auth/line', async (req, res) => {
     }
 
     res.json({ lineUserId, gameId: user.gameId, displayName, picture, isNew, user });
-
   } catch (e) {
-    console.error('auth/line 例外：', e);
-    res.status(500).json({ error: 'server_error', detail: String(e) });
+    console.error("auth/line 例外：", e);
+    res.status(500).json({ error: "server_error", detail: String(e) });
   }
 });
 
-// ------------------- 好友系統 API -------------------
+//#endregion
+
+//#region 付款 API
+/**
+ * 建立 LINE Pay 付款請求
+ * body: { userId: string, planId: 'small' | 'medium' | 'large' }
+ */
+app.post("/linepay/request", async (req, res) => {
+  try {
+    const { userId, planId } = req.body || {};
+    if (!userId || !planId || !TOPUP_PLANS[planId]) {
+      return res.status(400).json({ error: "invalid_params" });
+    }
+
+    // 確認玩家存在
+    const user = await users.findOne({ userId });
+    if (!user) return res.status(404).json({ error: "user_not_found" });
+
+    const plan = TOPUP_PLANS[planId];
+    const orderId = `TOPUP_${userId}_${Date.now()}_${planId}`;
+
+    const uri = "/v3/payments/request";
+    const body = {
+      amount: plan.amount,
+      currency: "TWD",
+      orderId,
+      packages: [
+        {
+          id: "dragonbones",
+          amount: plan.amount,
+          products: [
+            {
+              name: plan.label,
+              quantity: 1,
+              price: plan.amount,
+            },
+          ],
+        },
+      ],
+      redirectUrls: {
+        confirmUrl: `${PUBLIC_BASE_URL}/linepay/confirm`,
+        cancelUrl: `${PUBLIC_BASE_URL}/linepay/cancel`,
+      },
+    };
+
+    const nonce = `${Date.now()}_${Math.random()}`;
+    const signature = generateLinePaySignature(uri, body, nonce);
+
+    const r = await fetch(`${LINE_PAY_BASE_URL}${uri}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-LINE-ChannelId": LINE_PAY_CHANNEL_ID,
+        "X-LINE-Authorization-Nonce": nonce,
+        "X-LINE-Authorization": signature,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await r.json();
+    console.log("[LINE PAY request] resp =", data);
+
+    if (!r.ok || data.returnCode !== "0000") {
+      return res.status(500).json({ error: "linepay_request_failed", detail: data });
+    }
+
+    // 正常會回傳 transactionId + paymentUrl
+    // docs: info.paymentUrl.web / app :contentReference[oaicite:8]{index=8}
+    const paymentUrl = data.info?.paymentUrl?.web || data.info?.paymentUrl?.app;
+    if (!paymentUrl) {
+      return res.status(500).json({ error: "no_payment_url", detail: data });
+    }
+
+    // Sandbox 先不存 topup 訂單在 DB，也可以正常測流程
+    // 若要更嚴謹，可另外建 topups collection 記錄 orderId / planId / userId
+
+    res.json({
+      orderId,
+      paymentUrl,
+    });
+  } catch (e) {
+    console.error("[POST /linepay/request] error =", e);
+    res.status(500).json({ error: "server_error", detail: String(e) });
+  }
+});
+
+
+/**
+ * LINE Pay 付款完成後的回呼
+ * 由 LINE Pay 用 redirect 方式呼叫，例如：
+ * GET /linepay/confirm?transactionId=xxx&orderId=TOPUP_xxx
+ */
+app.get('/linepay/confirm', async (req, res) => {
+  try {
+    const { transactionId, orderId } = req.query;
+    if (!transactionId || !orderId) {
+      return res.status(400).send('missing transactionId or orderId');
+    }
+
+    // 從 orderId 把 userId 與 planId 抓回來（我們是 TOPUP_userId_timestamp_planId）
+    const parts = orderId.toString().split('_');
+    if (parts.length < 4 || parts[0] !== 'TOPUP') {
+      return res.status(400).send('invalid orderId');
+    }
+    const userId = parts[1];
+    const planId = parts[3];
+    const plan = TOPUP_PLANS[planId];
+    if (!plan) {
+      return res.status(400).send('unknown plan');
+    }
+
+    const uri = `/v3/payments/${transactionId}/confirm`;
+    const body = {
+      amount: plan.amount,
+      currency: 'TWD',
+    };
+
+    const nonce = `${Date.now()}_${Math.random()}`;
+    const signature = generateLinePaySignature(uri, body, nonce);
+
+    const r = await fetch(`${LINE_PAY_BASE_URL}${uri}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-LINE-ChannelId': LINE_PAY_CHANNEL_ID,
+        'X-LINE-Authorization-Nonce': nonce,
+        'X-LINE-Authorization': signature,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await r.json();
+    console.log('[LINE PAY confirm] resp =', data);
+
+    if (!r.ok || data.returnCode !== '0000') {
+      return res.status(500).send(`payment confirm failed: ${JSON.stringify(data)}`);
+    }
+
+    // *** 真正加龍骨 ***
+    const result = await users.updateOne(
+      { userId },
+      { $inc: { dragonBones: plan.bones } }
+    );
+
+    if (!result.matchedCount) {
+      return res.status(404).send('user not found when crediting dragonBones');
+    }
+
+    res.send(`
+      <html>
+        <body style="font-family: system-ui; text-align:center; padding-top:40px;">
+          <h2>付款成功</h2>
+          <p>已儲值 ${plan.bones} 龍骨到你的帳號。</p>
+          <p>即將自動回到遊戲，如果沒有跳轉，請點下面按鈕：</p>
+          <button
+            style="margin-top:16px;padding:10px 20px;font-size:16px;border-radius:8px;border:none;background:#06c755;color:white;"
+            onclick="goBack()"
+          >
+            回到遊戲
+          </button>
+
+          <script>
+            var gameUrl = "${GAME_LIFF_URL}";
+            function goBack() {
+              window.location.href = gameUrl;
+            }
+            // 1.5 秒後自動跳回遊戲
+            setTimeout(goBack, 1500);
+          </script>
+        </body>
+      </html>
+    `);
+  } catch (e) {
+    console.error('[GET /linepay/confirm] error =', e);
+    res.status(500).send('server error');
+  }
+});
+
+/** 付款取消時的回呼（單純提示用） */
+app.get('/linepay/cancel', (req, res) => {
+  res.send(`
+    <html>
+      <body style="font-family: system-ui; text-align:center; padding-top:40px;">
+        <h2>付款已取消</h2>
+        <p>如果不小心按到，可以回遊戲再試一次。</p>
+      </body>
+    </html>
+  `);
+});
+//#endregion
+
+//#region 好友系統 API
 
 /** 取得好友列表 */
-app.get('/friends/:userId', async (req, res) => {
+app.get("/friends/:userId", async (req, res) => {
   const user = await users.findOne({ userId: req.params.userId });
-  if (!user) return res.status(404).json({ error: '找不到玩家' });
+  if (!user) return res.status(404).json({ error: "找不到玩家" });
 
-  const friendList = await users.find({ userId: { $in: user.friends || [] } })
+  const friendList = await users
+    .find({ userId: { $in: user.friends || [] } })
     .project({ _id: 0, userId: 1, gameId: 1, displayName: 1, picture: 1 })
     .toArray();
 
@@ -316,7 +525,7 @@ app.get('/friends/:userId', async (req, res) => {
 });
 
 /** 取得好友公開資料（只回傳魚缸、魚等資訊） */
-app.get('/public/player/:userId', async (req, res) => {
+app.get("/public/player/:userId", async (req, res) => {
   const id = req.params.userId?.trim();
   const doc = await users.findOne(
     { $or: [{ userId: id }, { gameId: id }] },
@@ -330,26 +539,26 @@ app.get('/public/player/:userId', async (req, res) => {
         tankEnvironment: 1,
         tankList: 1,
         fishList: 1,
-      }
+      },
     }
   );
-  if (!doc) return res.status(404).json({ error: 'not found' });
+  if (!doc) return res.status(404).json({ error: "not found" });
 
   // ---- 把 fishList 補齊成完整 FishData ----
   const nowISO = new Date().toISOString();
-  const fullFishList = (doc.fishList ?? []).map(f => ({
+  const fullFishList = (doc.fishList ?? []).map((f) => ({
     id: f.id,
     name: f.name ?? `Fish_${f.id}`,
-    gender: f.gender ?? 'male',
+    gender: f.gender ?? "male",
     stage: f.stage ?? 1,
     growthDaysPassed: f.growthDaysPassed ?? 0,
     lastFedDate: f.lastFedDate ?? nowISO,
     hunger: f.hunger ?? 0,
     hungerRateMultiplier: f.hungerRateMultiplier ?? 1,
-    appearance: f.appearance ?? 'beautiful',
+    appearance: f.appearance ?? "beautiful",
     outfit: {
       head: f.outfit?.head ?? null,
-      accessories: f.outfit?.accessories ?? []
+      accessories: f.outfit?.accessories ?? [],
     },
     isMarried: f.isMarried ?? false,
     spouseId: f.spouseId ?? null,
@@ -359,17 +568,17 @@ app.get('/public/player/:userId', async (req, res) => {
       cold: f.status?.cold ?? false,
       sick: f.status?.sick ?? false,
     },
-    emotion: f.emotion ?? 'happy',
+    emotion: f.emotion ?? "happy",
     isDead: !!f.isDead,
     deathDate: f.deathDate ?? undefined,
-    tankId: f.tankId ?? (doc.tankList?.[0]?.id ?? 1),
+    tankId: f.tankId ?? doc.tankList?.[0]?.id ?? 1,
   }));
 
   // 過濾掉不存在的 fishId，避免舊資料殘留
-  const tankIds = new Set(fullFishList.map(fi => fi.id));
-  const cleanTankList = (doc.tankList ?? []).map(t => ({
+  const tankIds = new Set(fullFishList.map((fi) => fi.id));
+  const cleanTankList = (doc.tankList ?? []).map((t) => ({
     ...t,
-    fishIds: (t.fishIds ?? []).filter(fid => tankIds.has(fid)),
+    fishIds: (t.fishIds ?? []).filter((fid) => tankIds.has(fid)),
   }));
 
   res.json({
@@ -383,70 +592,69 @@ app.get('/public/player/:userId', async (req, res) => {
   });
 });
 
-
 /** 發送好友邀請 */
-app.post('/friend-requests', async (req, res) => {
+app.post("/friend-requests", async (req, res) => {
   const { fromUserId, toUserId } = req.body || {};
-  if (!fromUserId || !toUserId) return res.status(400).json({ error: 'invalid_params' });
-  if (fromUserId === toUserId) return res.status(400).json({ error: 'cannot_add_self' });
+  if (!fromUserId || !toUserId) return res.status(400).json({ error: "invalid_params" });
+  if (fromUserId === toUserId) return res.status(400).json({ error: "cannot_add_self" });
 
   const [fromUser, toUser] = await Promise.all([
     users.findOne({ userId: fromUserId }),
     users.findOne({ userId: toUserId }),
   ]);
-  if (!fromUser || !toUser) return res.status(404).json({ error: 'user_not_found' });
+  if (!fromUser || !toUser) return res.status(404).json({ error: "user_not_found" });
 
   // 已成為好友
   if ((fromUser.friends || []).includes(toUserId)) {
-    return res.status(409).json({ error: 'already_friends' });
+    return res.status(409).json({ error: "already_friends" });
   }
 
   // 好友上限檢查（送出方 / 對方 兩邊）
   if ((fromUser.friends || []).length >= FRIEND_LIMIT) {
-    return res.status(409).json({ error: 'friend_limit_reached_sender' });
+    return res.status(409).json({ error: "friend_limit_reached_sender" });
   }
   if ((toUser.friends || []).length >= FRIEND_LIMIT) {
-    return res.status(409).json({ error: 'friend_limit_reached_recipient' });
+    return res.status(409).json({ error: "friend_limit_reached_recipient" });
   }
 
   // 是否已有待處理邀請（任一方向）
   const existing = await friendRequests.findOne({
     $or: [
-      { fromUserId, toUserId, status: 'pending' },
-      { fromUserId: toUserId, toUserId: fromUserId, status: 'pending' }
-    ]
+      { fromUserId, toUserId, status: "pending" },
+      { fromUserId: toUserId, toUserId: fromUserId, status: "pending" },
+    ],
   });
 
   // 若對方先邀請你 → 自動成為好友
   if (existing && existing.fromUserId === toUserId && existing.toUserId === fromUserId) {
     // 成立前再次檢查雙方上限
     if ((fromUser.friends || []).length >= FRIEND_LIMIT || (toUser.friends || []).length >= FRIEND_LIMIT) {
-      return res.status(409).json({ error: 'friend_limit_reached' });
+      return res.status(409).json({ error: "friend_limit_reached" });
     }
 
     await friendRequests.updateOne(
       { requestId: existing.requestId },
-      { $set: { status: 'accepted', respondedAt: new Date() } }
+      { $set: { status: "accepted", respondedAt: new Date() } }
     );
 
     await friendRequests.updateOne(
       { requestId: existing.requestId },
-      { $set: { status: 'accepted', respondedAt: new Date() } }
+      { $set: { status: "accepted", respondedAt: new Date() } }
     );
     await users.updateOne({ userId: fromUserId }, { $addToSet: { friends: toUserId } });
     await users.updateOne({ userId: toUserId }, { $addToSet: { friends: fromUserId } });
 
     await sendMail(fromUserId, {
-      type: 'NOTICE',
-      title: '好友已成立',
+      type: "NOTICE",
+      title: "好友已成立",
       body: `${toUser.displayName || toUserId} 已與你成為好友`,
-      fromUser: { userId: toUserId, displayName: toUser.displayName, picture: toUser.picture }
+      fromUser: { userId: toUserId, displayName: toUser.displayName, picture: toUser.picture },
     });
     await sendMail(toUserId, {
-      type: 'NOTICE',
-      title: '好友已成立',
+      type: "NOTICE",
+      title: "好友已成立",
       body: `你已與 ${fromUser.displayName || fromUserId} 成為好友`,
-      fromUser: { userId: fromUserId, displayName: fromUser.displayName, picture: fromUser.picture }
+      fromUser: { userId: fromUserId, displayName: fromUser.displayName, picture: fromUser.picture },
     });
 
     return res.json({ autoAccepted: true });
@@ -454,36 +662,35 @@ app.post('/friend-requests', async (req, res) => {
 
   // 你已經送過 pending
   if (existing && existing.fromUserId === fromUserId) {
-    return res.status(409).json({ error: 'already_pending' });
+    return res.status(409).json({ error: "already_pending" });
   }
 
   // 建立新的邀請
   const request = {
-    requestId: 'FR_' + uuid(),
+    requestId: "FR_" + uuid(),
     fromUserId,
     toUserId,
-    status: 'pending',
-    createdAt: new Date()
+    status: "pending",
+    createdAt: new Date(),
   };
   await friendRequests.insertOne(request);
 
   // 寄好友邀請信件給對方
   await sendMail(toUserId, {
-    type: 'FRIEND_REQUEST',
-    title: '好友邀請',
+    type: "FRIEND_REQUEST",
+    title: "好友邀請",
     body: `${fromUser.displayName || fromUserId} 想加你好友`,
     fromUser: { userId: fromUserId, displayName: fromUser.displayName, picture: fromUser.picture },
-    payload: { requestId: request.requestId, fromUserId }
+    payload: { requestId: request.requestId, fromUserId },
   });
 
   res.json({ request });
 });
 
-
 /** 查詢好友邀請列表 */
-app.get('/friend-requests', async (req, res) => {
-  const userId = (req.query.userId || '').toString();
-  if (!userId) return res.status(400).json({ error: 'invalid_params' });
+app.get("/friend-requests", async (req, res) => {
+  const userId = (req.query.userId || "").toString();
+  if (!userId) return res.status(400).json({ error: "invalid_params" });
 
   const [incoming, outgoing] = await Promise.all([
     friendRequests.find({ toUserId: userId }).sort({ createdAt: -1 }).toArray(),
@@ -494,119 +701,113 @@ app.get('/friend-requests', async (req, res) => {
 });
 
 /** 回覆好友邀請（接受 / 拒絕 / 取消） */
-app.post('/friend-requests/respond', async (req, res) => {
+app.post("/friend-requests/respond", async (req, res) => {
   const { userId, requestId, action } = req.body || {};
-  console.log('[POST /friend-requests] body =', req.body);
-  if (!userId || !requestId || !action) return res.status(400).json({ error: 'invalid_params' });
+  console.log("[POST /friend-requests] body =", req.body);
+  if (!userId || !requestId || !action) return res.status(400).json({ error: "invalid_params" });
 
   const fr = await friendRequests.findOne({ requestId });
-  if (!fr) return res.status(404).json({ error: 'request_not_found' });
-  if (fr.status !== 'pending') return res.status(409).json({ error: 'already_handled' });
+  if (!fr) return res.status(404).json({ error: "request_not_found" });
+  if (fr.status !== "pending") return res.status(409).json({ error: "already_handled" });
 
-  const isRecipient = (userId === fr.toUserId);
-  const isSender = (userId === fr.fromUserId);
+  const isRecipient = userId === fr.toUserId;
+  const isSender = userId === fr.fromUserId;
 
-  if (action === 'cancel') {
-    if (!isSender) return res.status(403).json({ error: 'not_request_participant' });
-    await friendRequests.updateOne({ requestId }, { $set: { status: 'canceled', respondedAt: new Date() } });
+  if (action === "cancel") {
+    if (!isSender) return res.status(403).json({ error: "not_request_participant" });
+    await friendRequests.updateOne({ requestId }, { $set: { status: "canceled", respondedAt: new Date() } });
     return res.json({ ok: true });
   }
 
-  if (!isRecipient) return res.status(403).json({ error: 'not_request_participant' });
+  if (!isRecipient) return res.status(403).json({ error: "not_request_participant" });
 
   const [fromUser, toUser] = await Promise.all([
     users.findOne({ userId: fr.fromUserId }),
-    users.findOne({ userId: fr.toUserId })
+    users.findOne({ userId: fr.toUserId }),
   ]);
 
-  if (action === 'decline') {
-    await friendRequests.updateOne({ requestId }, { $set: { status: 'declined', respondedAt: new Date() } });
+  if (action === "decline") {
+    await friendRequests.updateOne({ requestId }, { $set: { status: "declined", respondedAt: new Date() } });
     await sendMail(fr.fromUserId, {
-      type: 'NOTICE',
-      title: '好友邀請已被拒絕',
+      type: "NOTICE",
+      title: "好友邀請已被拒絕",
       body: `${toUser?.displayName || fr.toUserId} 拒絕了你的好友邀請`,
-      fromUser: { userId: fr.toUserId, displayName: toUser?.displayName, picture: toUser?.picture }
+      fromUser: { userId: fr.toUserId, displayName: toUser?.displayName, picture: toUser?.picture },
     });
     return res.json({ ok: true });
   }
 
-  if (action === 'accept') {
+  if (action === "accept") {
     // 重新抓雙方（保險）
     const [fromUser, toUser] = await Promise.all([
       users.findOne({ userId: fr.fromUserId }),
-      users.findOne({ userId: fr.toUserId })
+      users.findOne({ userId: fr.toUserId }),
     ]);
 
-    const fromCnt = (fromUser?.friends?.length || 0);
-    const toCnt = (toUser?.friends?.length || 0);
+    const fromCnt = fromUser?.friends?.length || 0;
+    const toCnt = toUser?.friends?.length || 0;
 
-    // 誰滿就回誰的錯誤碼 
+    // 誰滿就回誰的錯誤碼
     if (fromCnt >= FRIEND_LIMIT) {
-      return res.status(409).json({ error: 'friend_limit_reached_other' });  // 對方（邀請發出者）已滿
+      return res.status(409).json({ error: "friend_limit_reached_other" }); // 對方（邀請發出者）已滿
     }
     if (toCnt >= FRIEND_LIMIT) {
-      return res.status(409).json({ error: 'friend_limit_reached_self' });   // 自己（按接受的人）已滿
+      return res.status(409).json({ error: "friend_limit_reached_self" }); // 自己（按接受的人）已滿
     }
 
-    await friendRequests.updateOne({ requestId }, { $set: { status: 'accepted', respondedAt: new Date() } });
+    await friendRequests.updateOne({ requestId }, { $set: { status: "accepted", respondedAt: new Date() } });
     await users.updateOne({ userId: fr.fromUserId }, { $addToSet: { friends: fr.toUserId } });
     await users.updateOne({ userId: fr.toUserId }, { $addToSet: { friends: fr.fromUserId } });
 
     await sendMail(fr.fromUserId, {
-      type: 'NOTICE',
-      title: '好友已成立',
+      type: "NOTICE",
+      title: "好友已成立",
       body: `${toUser?.displayName || fr.toUserId} 已接受你的邀請`,
-      fromUser: { userId: fr.toUserId, displayName: toUser?.displayName, picture: toUser?.picture }
+      fromUser: { userId: fr.toUserId, displayName: toUser?.displayName, picture: toUser?.picture },
     });
     await sendMail(fr.toUserId, {
-      type: 'NOTICE',
-      title: '好友已成立',
+      type: "NOTICE",
+      title: "好友已成立",
       body: `你已與 ${fromUser?.displayName || fr.fromUserId} 成為好友`,
-      fromUser: { userId: fr.fromUserId, displayName: fromUser?.displayName, picture: fromUser?.picture }
+      fromUser: { userId: fr.fromUserId, displayName: fromUser?.displayName, picture: fromUser?.picture },
     });
 
     return res.json({ ok: true });
   }
 
-  res.status(400).json({ error: 'invalid_action' });
+  res.status(400).json({ error: "invalid_action" });
 });
 
 /** 解除好友（雙向） */
-app.post('/friends/remove', async (req, res) => {
+app.post("/friends/remove", async (req, res) => {
   const { userId, friendUserId } = req.body || {};
-  if (!userId || !friendUserId) return res.status(400).json({ error: 'invalid_params' });
+  if (!userId || !friendUserId) return res.status(400).json({ error: "invalid_params" });
 
-  const [u1, u2] = await Promise.all([
-    users.findOne({ userId }),
-    users.findOne({ userId: friendUserId })
-  ]);
-  if (!u1 || !u2) return res.status(404).json({ error: 'user_not_found' });
+  const [u1, u2] = await Promise.all([users.findOne({ userId }), users.findOne({ userId: friendUserId })]);
+  if (!u1 || !u2) return res.status(404).json({ error: "user_not_found" });
 
   await users.updateOne({ userId }, { $pull: { friends: friendUserId } });
   await users.updateOne({ userId: friendUserId }, { $pull: { friends: userId } });
 
   // 寄通知信
   await sendMail(friendUserId, {
-    type: 'NOTICE',
-    title: '好友關係已解除',
+    type: "NOTICE",
+    title: "好友關係已解除",
     body: `${u1.displayName || userId} 已解除與你的好友關係`,
-    fromUser: { userId, displayName: u1.displayName, picture: u1.picture }
+    fromUser: { userId, displayName: u1.displayName, picture: u1.picture },
   });
 
   res.json({ ok: true });
 });
 
 /** 推薦隨機玩家 */
-app.get('/recommend-users', async (req, res) => {
+app.get("/recommend-users", async (req, res) => {
   try {
     const count = parseInt(req.query.count) || 5;
-    const excludeUserId = (req.query.excludeUserId || '').toString();
+    const excludeUserId = (req.query.excludeUserId || "").toString();
 
     // 先找出使用者的好友清單
-    const currentUser = await users.findOne(
-      { userId: excludeUserId },
-      { projection: { friends: 1 } }
-    );
+    const currentUser = await users.findOne({ userId: excludeUserId }, { projection: { friends: 1 } });
 
     const excludeIds = [excludeUserId, ...(currentUser?.friends || [])];
 
@@ -614,62 +815,63 @@ app.get('/recommend-users', async (req, res) => {
     const pipeline = [
       { $match: { userId: { $nin: excludeIds } } },
       { $sample: { size: count } },
-      { $project: { _id: 0, userId: 1, gameId: 1, displayName: 1, picture: 1 } }
+      { $project: { _id: 0, userId: 1, gameId: 1, displayName: 1, picture: 1 } },
     ];
 
     const usersList = await users.aggregate(pipeline).toArray();
     res.json(usersList);
   } catch (e) {
-    console.error('[GET /recommend-users] error:', e);
-    res.status(500).json({ error: 'server_error' });
+    console.error("[GET /recommend-users] error:", e);
+    res.status(500).json({ error: "server_error" });
   }
 });
+//#endregion
 
-
-// ------------------- 信箱 API -------------------
+//#region 信箱 API
 
 /** 取得收件匣 */
-app.get('/mail/inbox', async (req, res) => {
-  const userId = (req.query.userId || '').toString();
-  if (!userId) return res.status(400).json({ error: 'invalid_params' });
+app.get("/mail/inbox", async (req, res) => {
+  const userId = (req.query.userId || "").toString();
+  if (!userId) return res.status(400).json({ error: "invalid_params" });
 
   const list = await mails.find({ userId }).sort({ createdAt: -1 }).toArray();
   res.json(list);
 });
 
 /** 標記信件已讀 */
-app.post('/mail/mark-read', async (req, res) => {
+app.post("/mail/mark-read", async (req, res) => {
   const { userId, mailId } = req.body || {};
-  if (!userId || !mailId) return res.status(400).json({ error: 'invalid_params' });
+  if (!userId || !mailId) return res.status(400).json({ error: "invalid_params" });
 
-  const r = await mails.updateOne({ mailId, userId }, { $set: { status: 'read' } });
-  if (!r.matchedCount) return res.status(404).json({ error: 'mail_not_found' });
+  const r = await mails.updateOne({ mailId, userId }, { $set: { status: "read" } });
+  if (!r.matchedCount) return res.status(404).json({ error: "mail_not_found" });
   res.json({ ok: true });
 });
 
+//#endregion
 
-// ------------------- 測試用 API -------------------
+//#region 測試用 API
 
 /** 建立測試使用者 */
-app.post('/dev/create/:userId', async (req, res) => {
+app.post("/dev/create/:userId", async (req, res) => {
   try {
     const userId = req.params.userId?.trim();
-    if (!userId) return res.status(400).json({ error: 'missing userId' });
+    if (!userId) return res.status(400).json({ error: "missing userId" });
 
     // 你檔案裡已經有 buildDefaultPlayer(...) 可以直接用
     const exists = await users.findOne({ userId });
     if (exists) return res.json({ ok: true, user: exists, existed: true });
 
-    const player = await buildDefaultPlayer(userId, userId, '');
+    const player = await buildDefaultPlayer(userId, userId, "");
     await users.insertOne(player);
     const fresh = await users.findOne({ userId });
     res.json({ ok: true, user: fresh, existed: false });
   } catch (e) {
-    console.error('[DEV create] error:', e);
-    res.status(500).json({ error: 'server_error' });
+    console.error("[DEV create] error:", e);
+    res.status(500).json({ error: "server_error" });
   }
 });
+//#endregion
 
 // 啟動伺服器
-app.listen(3000, () => console.log('伺服器已啟動：http://localhost:3000'));
-
+app.listen(3000, () => console.log("伺服器已啟動：http://localhost:3000"));
